@@ -1,0 +1,75 @@
+---
+- name: Install and Configure MariaDB Database Server
+  hosts: dbservers
+  become: yes
+  vars:
+    mysql_root_password: "SecurePassword123!"
+    mysql_port: 3306
+    
+  tasks:
+    - name: Install MariaDB server and client
+      package:
+        name:
+          - mariadb-server
+          - mariadb
+          - python3-PyMySQL
+        state: present
+      tags:
+        - packages
+        - database
+    
+    - name: Start and enable MariaDB service
+      service:
+        name: mariadb
+        state: started
+        enabled: yes
+      tags:
+        - services
+    
+    - name: Set MariaDB root password
+      mysql_user:
+        name: root
+        password: "{{ mysql_root_password }}"
+        login_unix_socket: /var/lib/mysql/mysql.sock
+        state: present
+      tags:
+        - security
+    
+    - name: Create database configuration file
+      copy:
+        content: |
+          [mysql]
+          port={{ mysql_port }}
+          socket=/var/lib/mysql/mysql.sock
+          
+          [mysqld]
+          port={{ mysql_port }}
+          socket=/var/lib/mysql/mysql.sock
+          datadir=/var/lib/mysql
+          log-error=/var/log/mariadb/mariadb.log
+          pid-file=/var/run/mariadb/mariadb.pid
+        dest: /etc/my.cnf.d/custom.cnf
+        owner: root
+        group: root
+        mode: '0644'
+      notify:
+        - restart mariadb
+      tags:
+        - configuration
+    
+    - name: Open firewall for MySQL
+      firewalld:
+        port: "{{ mysql_port }}/tcp"
+        permanent: yes
+        state: enabled
+        immediate: yes
+      tags:
+        - firewall
+      ignore_errors: yes
+  
+  handlers:
+    - name: restart mariadb
+      service:
+        name: mariadb
+        state: restarted
+EOF
