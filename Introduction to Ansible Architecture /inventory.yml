@@ -1,0 +1,20 @@
+---
+all:
+  children:
+    local:
+      hosts:
+        localhost:
+          ansible_connection: local
+    webservers:
+      hosts:
+        web1:
+          ansible_host: 127.0.0.1
+          ansible_user: ubuntu
+        web2:
+          ansible_host: 127.0.0.1
+          ansible_user: ubuntu
+    databases:
+      hosts:
+        db1:
+          ansible_host: 127.0.0.1
+          ansible_user: ubuntu
