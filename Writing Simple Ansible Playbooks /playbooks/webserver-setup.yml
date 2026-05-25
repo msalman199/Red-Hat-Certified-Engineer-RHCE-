@@ -1,0 +1,96 @@
+---
+- name: Install and Configure Apache Web Server
+  hosts: webservers
+  become: yes
+  vars:
+    http_port: 80
+    max_clients: 200
+    document_root: /var/www/html
+    
+  tasks:
+    - name: Install Apache HTTP Server
+      package:
+        name: httpd
+        state: present
+      tags:
+        - packages
+        - apache
+    
+    - name: Install additional packages
+      package:
+        name:
+          - wget
+          - curl
+          - vim
+        state: present
+      tags:
+        - packages
+    
+    - name: Create custom index.html
+      copy:
+        content: |
+          <!DOCTYPE html>
+          <html>
+          <head>
+              <title>Welcome to {{ inventory_hostname }}</title>
+          </head>
+          <body>
+              <h1>Hello from {{ inventory_hostname }}</h1>
+              <p>This server was configured by Ansible!</p>
+              <p>Server IP: {{ ansible_default_ipv4.address }}</p>
+              <p>Configured on: {{ ansible_date_time.date }}</p>
+          </body>
+          </html>
+        dest: "{{ document_root }}/index.html"
+        owner: apache
+        group: apache
+        mode: '0644'
+      tags:
+        - content
+    
+    - name: Configure Apache main configuration
+      lineinfile:
+        path: /etc/httpd/conf/httpd.conf
+        regexp: '^Listen '
+        line: "Listen {{ http_port }}"
+        backup: yes
+      notify:
+        - restart apache
+      tags:
+        - configuration
+    
+    - name: Configure MaxRequestWorkers
+      lineinfile:
+        path: /etc/httpd/conf/httpd.conf
+        regexp: '^#?MaxRequestWorkers'
+        line: "MaxRequestWorkers {{ max_clients }}"
+        backup: yes
+      notify:
+        - restart apache
+      tags:
+        - configuration
+    
+    - name: Ensure Apache is started and enabled
+      service:
+        name: httpd
+        state: started
+        enabled: yes
+      tags:
+        - services
+    
+    - name: Open firewall for HTTP
+      firewalld:
+        service: http
+        permanent: yes
+        state: enabled
+        immediate: yes
+      tags:
+        - firewall
+      ignore_errors: yes
+  
+  handlers:
+    - name: restart apache
+      service:
+        name: httpd
+        state: restarted
+EOF
