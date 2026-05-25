@@ -1,0 +1,40 @@
+---
+- name: Idempotency Testing Examples
+  hosts: webservers
+  become: yes
+  
+  tasks:
+    # NON-IDEMPOTENT EXAMPLE (avoid this)
+    - name: Bad example - always runs command
+      shell: echo "Current time: $(date)" >> /tmp/timestamps.log
+      tags:
+        - bad-example
+    
+    # IDEMPOTENT EXAMPLES (recommended)
+    - name: Good example - create file with specific content
+      copy:
+        content: "This file was created by Ansible\n"
+        dest: /tmp/ansible-managed.txt
+        owner: root
+        group: root
+        mode: '0644'
+      tags:
+        - good-example
+    
+    - name: Good example - ensure directory exists
+      file:
+        path: /opt/myapp
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+      tags:
+        - good-example
+    
+    - name: Good example - conditional command execution
+      shell: echo "First run" > /tmp/first-run.txt
+      args:
+        creates: /tmp/first-run.txt
+      tags:
+        - good-example
+EOF
