@@ -1,0 +1,56 @@
+---
+- name: Manage SSH Keys for Users
+  hosts: all
+  become: yes
+  vars:
+    ssh_key_users:
+      - username: john_doe
+        ssh_keys:
+          - "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC7... john@workstation"
+          - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI... john@laptop"
+      - username: jane_smith
+        ssh_keys:
+          - "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQD8... jane@desktop"
+
+  tasks:
+    - name: Ensure users exist
+      user:
+        name: "{{ item.username }}"
+        state: present
+      loop: "{{ ssh_key_users }}"
+
+    - name: Ensure .ssh directory exists for users
+      file:
+        path: "/home/{{ item.username }}/.ssh"
+        state: directory
+        owner: "{{ item.username }}"
+        group: "{{ item.username }}"
+        mode: '0700'
+      loop: "{{ ssh_key_users }}"
+
+    - name: Add SSH public keys to authorized_keys
+      authorized_key:
+        user: "{{ item.0.username }}"
+        key: "{{ item.1 }}"
+        state: present
+        manage_dir: yes
+      with_subelements:
+        - "{{ ssh_key_users }}"
+        - ssh_keys
+
+    - name: Set proper permissions on authorized_keys
+      file:
+        path: "/home/{{ item.username }}/.ssh/authorized_keys"
+        owner: "{{ item.username }}"
+        group: "{{ item.username }}"
+        mode: '0600'
+      loop: "{{ ssh_key_users }}"
+
+    - name: Generate SSH key pairs for users (if needed)
+      user:
+        name: "{{ item.username }}"
+        generate_ssh_key: yes
+        ssh_key_bits: 2048
+        ssh_key_file: "/home/{{ item.username }}/.ssh/id_rsa"
+      loop: "{{ ssh_key_users }}"
+EOF
