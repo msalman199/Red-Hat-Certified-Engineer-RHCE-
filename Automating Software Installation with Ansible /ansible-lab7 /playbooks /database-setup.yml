@@ -1,0 +1,60 @@
+---
+- name: Configure Database Servers with MariaDB
+  hosts: databases
+  become: yes
+  gather_facts: yes
+  
+  vars:
+    db_packages:
+      - mariadb-server
+      - mariadb
+      - python3-PyMySQL
+    
+    mysql_root_password: "SecurePassword123!"
+    
+  tasks:
+    - name: Install MariaDB packages
+      dnf:
+        name: "{{ db_packages }}"
+        state: present
+      notify: restart mariadb
+    
+    - name: Start and enable MariaDB service
+      systemd:
+        name: mariadb
+        state: started
+        enabled: yes
+    
+    - name: Configure firewall for MySQL
+      firewalld:
+        port: 3306/tcp
+        permanent: yes
+        state: enabled
+        immediate: yes
+      ignore_errors: yes
+    
+    - name: Set MySQL root password
+      mysql_user:
+        name: root
+        password: "{{ mysql_root_password }}"
+        login_unix_socket: /var/lib/mysql/mysql.sock
+        state: present
+      ignore_errors: yes
+    
+    - name: Create .my.cnf file for root user
+      copy:
+        content: |
+          [client]
+          user=root
+          password={{ mysql_root_password }}
+        dest: /root/.my.cnf
+        owner: root
+        group: root
+        mode: '0600'
+  
+  handlers:
+    - name: restart mariadb
+      systemd:
+        name: mariadb
+        state: restarted
+EOF
