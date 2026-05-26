@@ -1,0 +1,17 @@
+# Apache Configuration Variables
+apache_port: 80
+apache_listen_port: 80
+apache_server_admin: admin@example.com
+apache_document_root: /var/www/html
+apache_server_name: "{{ ansible_fqdn }}"
+apache_max_clients: 150
+apache_threads_per_child: 25
+apache_log_level: warn
+apache_timeout: 300
+
+# Custom application settings
+app_name: "My Web Application"
+app_version: "1.0.0"
+enable_ssl: false
+ssl_port: 443
+EOF
