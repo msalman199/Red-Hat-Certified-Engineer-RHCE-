@@ -1,0 +1,18 @@
+namespace: alnafi
+name: webstack
+version: 1.0.0
+readme: README.md
+authors:
+  - Al Nafi Training Team
+description: A collection of roles for web stack deployment
+license:
+  - MIT
+tags:
+  - webserver
+  - database
+  - fullstack
+dependencies: {}
+repository: https://github.com/alnafi/ansible-webstack
+documentation: https://docs.alnafi.com/ansible-webstack
+homepage: https://alnafi.com
+issues: https://github.com/alnafi/ansible-webstack/issues
