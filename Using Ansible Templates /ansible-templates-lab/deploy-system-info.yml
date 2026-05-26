@@ -1,0 +1,44 @@
+---
+- name: Deploy System Information Dashboard
+  hosts: webservers
+  become: yes
+  gather_facts: yes
+  
+  tasks:
+    - name: Gather package facts
+      package_facts:
+        manager: auto
+
+    - name: Create system-info directory
+      file:
+        path: "{{ apache_document_root }}/system-info"
+        state: directory
+        owner: apache
+        group: apache
+        mode: '0755'
+
+    - name: Deploy system information page
+      template:
+        src: system-info.html.j2
+        dest: "{{ apache_document_root }}/system-info/index.html"
+        owner: apache
+        group: apache
+        mode: '0644'
+
+    - name: Create a facts dump file
+      copy:
+        content: "{{ ansible_facts | to_nice_json }}"
+        dest: "{{ apache_document_root }}/system-info/facts.json"
+        owner: apache
+        group: apache
+        mode: '0644'
+
+    - name: Display access information
+      debug:
+        msg: |
+          System information dashboard deployed successfully!
+          Access URLs:
+          - Main page: http://{{ ansible_default_ipv4.address }}/
+          - System info: http://{{ ansible_default_ipv4.address }}/system-info/
+          - Raw facts: http://{{ ansible_default_ipv4.address }}/system-info/facts.json
+EOF
