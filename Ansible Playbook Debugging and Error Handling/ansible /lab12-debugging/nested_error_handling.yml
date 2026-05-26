@@ -1,0 +1,64 @@
+---
+- name: Nested Error Handling and Recovery
+  hosts: localhost
+  vars:
+    max_retries: 2
+    
+  tasks:
+    - name: Multi-level error handling
+      block:
+        - name: Primary operation block
+          block:
+            - name: Attempt primary method
+              command: /usr/bin/nonexistent-command
+              register: primary_result
+          
+          rescue:
+            - name: Primary method failed, trying alternative
+              debug:
+                msg: "Primary method failed, attempting alternative approach"
+            
+            - name: Alternative operation block
+              block:
+                - name: Attempt alternative method
+                  command: /bin/false
+                  register: alternative_result
+              
+              rescue:
+                - name: Alternative method also failed
+                  debug:
+                    msg: "Alternative method failed, using fallback"
+                
+                - name: Fallback operation
+                  debug:
+                    msg: "Executing fallback procedure"
+                  register: fallback_result
+                
+                - name: Set success flag for fallback
+                  set_fact:
+                    operation_successful: true
+      
+      rescue:
+        - name: All methods failed
+          debug:
+            msg: "All recovery attempts failed, logging error"
+        
+        - name: Set failure flag
+          set_fact:
+            operation_successful: false
+      
+      always:
+        - name: Report final status
+          debug:
+            msg: "Operation status: {{ 'SUCCESS' if operation_successful | default(false) else 'FAILED' }}"
+    
+    - name: Conditional continuation based on previous results
+      debug:
+        msg: "Continuing with next phase of operations"
+      when: operation_successful | default(false)
+    
+    - name: Error notification
+      debug:
+        msg: "Sending error notification to administrators"
+      when: not (operation_successful | default(false))
+EOF
