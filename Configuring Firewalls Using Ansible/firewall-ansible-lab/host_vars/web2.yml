@@ -1,0 +1,22 @@
+---
+# Web2 specific configuration - Internal application server
+firewall_zones:
+  - name: internal
+    target: default
+    services:
+      - ssh
+      - http
+    ports:
+      - "8080/tcp"
+      - "3306/tcp"
+    sources:
+      - "192.168.1.0/24"
+      - "10.0.0.0/8"
+
+  - name: public
+    target: DROP
+    services:
+      - ssh
+
+default_zone: internal
+server_role: "internal_app"
