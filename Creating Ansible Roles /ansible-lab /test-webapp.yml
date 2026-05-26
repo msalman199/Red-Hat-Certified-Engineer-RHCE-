@@ -1,0 +1,27 @@
+---
+- name: Deploy Full-Stack Web Application
+  hosts: webservers
+  become: yes
+  roles:
+    - webapp
+
+  post_tasks:
+    - name: Wait for services to be ready
+      wait_for:
+        port: "{{ item }}"
+        host: "{{ ansible_default_ipv4.address }}"
+        delay: 10
+      loop:
+        - "{{ webserver_port | default(8080) }}"
+        - "{{ db_port | default(3306) }}"
+
+    - name: Test web application
+      uri:
+        url: "http://{{ ansible_default_ipv4.address }}:{{ webserver_port | default(8080) }}/webapp/"
+        method: GET
+        status_code: 200
+      delegate_to: localhost
+
+    - name: Display application URL
+      debug:
+        msg: "Full-stack application is running at http://{{ ansible_default_ipv4.address }}:{{ webserver_port | default(8080) }}/webapp/"
