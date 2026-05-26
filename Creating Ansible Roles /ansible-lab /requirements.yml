@@ -1,0 +1,19 @@
+---
+# Install from Ansible Galaxy
+- name: geerlingguy.nginx
+  version: "3.1.4"
+
+- name: geerlingguy.firewall
+  version: "2.5.0"
+
+- name: geerlingguy.security
+  version: "2.0.1"
+
+# Install from Git repository
+- name: custom-monitoring
+  src: https://github.com/example/ansible-monitoring-role.git
+  version: main
+
+# Install from local path
+- name: local-role
+  src: ./roles/webserver
