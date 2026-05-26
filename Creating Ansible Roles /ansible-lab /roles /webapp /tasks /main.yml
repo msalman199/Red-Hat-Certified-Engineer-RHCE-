@@ -1,0 +1,39 @@
+---
+# tasks file for webapp
+- name: Install PHP and required modules
+  package:
+    name:
+      - php
+      - php-mysql
+      - php-json
+      - php-curl
+    state: present
+  become: yes
+
+- name: Create application directory
+  file:
+    path: /var/www/html/webapp
+    state: directory
+    owner: apache
+    group: apache
+    mode: '0755'
+  become: yes
+
+- name: Deploy application configuration
+  template:
+    src: config.php.j2
+    dest: /var/www/html/webapp/config.php
+    owner: apache
+    group: apache
+    mode: '0644'
+  become: yes
+  notify: restart webserver
+
+- name: Deploy sample application
+  template:
+    src: app.php.j2
+    dest: /var/www/html/webapp/index.php
+    owner: apache
+    group: apache
+    mode: '0644'
+  become: yes
