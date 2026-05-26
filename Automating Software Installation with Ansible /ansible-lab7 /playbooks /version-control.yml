@@ -1,0 +1,70 @@
+---
+- name: Package Version Control and Upgrade Management
+  hosts: all
+  become: yes
+  gather_facts: yes
+  
+  vars:
+    controlled_packages:
+      - name: kernel
+        state: latest
+        update_only: yes
+      - name: openssl
+        state: latest
+        security_only: yes
+      - name: httpd
+        state: present
+        version: "2.4*"
+        hold_version: no
+    
+    exclude_packages:
+      - kernel-debug
+      - kernel-devel
+    
+  tasks:
+    - name: Create DNF configuration for version control
+      copy:
+        content: |
+          [main]
+          gpgcheck=1
+          installonly_limit=3
+          clean_requirements_on_remove=True
+          best=True
+          skip_if_unavailable=False
+          exclude={{ exclude_packages | join(' ') }}
+        dest: /etc/dnf/dnf.conf
+        backup: yes
+      when: ansible_os_family == "RedHat"
+    
+    - name: Install specific package versions
+      dnf:
+        name: "{{ item.name }}{% if item.version is defined %}-{{ item.version }}{% endif %}"
+        state: "{{ item.state }}"
+        update_only: "{{ item.update_only | default(false) }}"
+      loop: "{{ controlled_packages }}"
+      when: ansible_os_family == "RedHat"
+    
+    - name: Check current package versions
+      shell: rpm -qa | grep -E "{{ controlled_packages | map(attribute='name') | join('|') }}"
+      register: current_versions
+      changed_when: false
+    
+    - name: Display current package versions
+      debug:
+        msg: "Current versions: {{ current_versions.stdout_lines }}"
+    
+    - name: Create package version report
+      copy:
+        content: |
+          Package Version Report - {{ ansible_date_time.iso8601 }}
+          ================================================
+          Hostname: {{ inventory_hostname }}
+          OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
+          
+          Installed Packages:
+          {% for line in current_versions.stdout_lines %}
+          {{ line }}
+          {% endfor %}
+        dest: /tmp/package-report-{{ inventory_hostname }}.txt
+      delegate_to: localhost
+EOF
