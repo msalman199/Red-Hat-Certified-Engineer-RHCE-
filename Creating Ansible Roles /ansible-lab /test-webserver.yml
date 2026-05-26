@@ -1,0 +1,18 @@
+---
+- name: Test Web Server Role
+  hosts: webservers
+  become: yes
+  roles:
+    - webserver
+
+  post_tasks:
+    - name: Verify web server is running
+      uri:
+        url: "http://{{ ansible_default_ipv4.address }}:{{ webserver_port }}"
+        method: GET
+        status_code: 200
+      delegate_to: localhost
+
+    - name: Display web server status
+      debug:
+        msg: "Web server is successfully running on http://{{ ansible_default_ipv4.address }}:{{ webserver_port }}"
