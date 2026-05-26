@@ -1,0 +1,149 @@
+---
+- name: Robust System Reboot with Error Handling
+  hosts: managed_nodes
+  become: yes
+  gather_facts: yes
+  serial: 1  # Reboot one system at a time
+  
+  vars:
+    reboot_timeout: 300
+    connect_timeout: 10
+    max_reboot_attempts: 3
+    notification_email: "admin@company.com"
+    
+  handlers:
+    - name: Send failure notification
+      mail:
+        to: "{{ notification_email }}"
+        subject: "ALERT: System Reboot Failed on {{ inventory_hostname }}"
+        body: |
+          System reboot failed on {{ inventory_hostname }}
+          Time: {{ ansible_date_time.iso8601 }}
+          Error: {{ reboot_error_msg | default('Unknown error') }}
+        host: localhost
+      listen: "reboot failed"
+      ignore_errors: yes
+  
+  pre_tasks:
+    - name: Check system prerequisites
+      block:
+        - name: Verify system is accessible
+          ping:
+          
+        - name: Check available disk space
+          shell: df / | awk 'NR==2 {print $5}' | sed 's/%//'
+          register: disk_usage
+          
+        - name: Fail if disk space is critical
+          fail:
+            msg: "Insufficient disk space: {{ disk_usage.stdout }}% used"
+          when: disk_usage.stdout | int > 95
+          
+        - name: Check system load
+          shell: uptime | awk -F'load average:' '{print $2}' | awk '{print $1}' | sed 's/,//'
+          register: system_load
+          
+        - name: Warning for high system load
+          debug:
+            msg: "WARNING: High system load detected: {{ system_load.stdout }}"
+          when: system_load.stdout | float > 5.0
+          
+      rescue:
+        - name: Handle prerequisite check failures
+          debug:
+            msg: "Prerequisite checks failed, but continuing with reboot attempt"
+          
+        - name: Set error flag
+          set_fact:
+            prereq_failed: true
+  
+  tasks:
+    - name: Attempt system reboot with retry logic
+      block:
+        - name: Create backup of critical files before reboot
+          copy:
+            src: "{{ item }}"
+            dest: "{{ item }}.backup.{{ ansible_date_time.epoch }}"
+            remote_src: yes
+          loop:
+            - /etc/fstab
+            - /etc/hosts
+            - /boot/grub2/grub.cfg
+          ignore_errors: yes
+          
+        - name: Perform system reboot with error handling
+          reboot:
+            reboot_timeout: "{{ reboot_timeout }}"
+            connect_timeout: "{{ connect_timeout }}"
+            test_command: "systemctl is-system-running --wait"
+            msg: "Ansible reboot with error handling"
+          register: reboot_result
+          retries: "{{ max_reboot_attempts }}"
+          delay: 60
+          
+        - name: Verify reboot success
+          debug:
+            msg: "Reboot successful! Elapsed time: {{ reboot_result.elapsed }} seconds"
+            
+      rescue:
+        - name: Handle reboot failure
+          block:
+            - name: Set error message
+              set_fact:
+                reboot_error_msg: "Reboot failed after {{ max_reboot_attempts }} attempts"
+                
+            - name: Log reboot failure
+              lineinfile:
+                path: /var/log/ansible-reboot/failed-reboots.log
+                line: "{{ ansible_date_time.iso8601 }} - FAILED: {{ inventory_hostname }} - {{ reboot_error_msg }}"
+                create: yes
+              delegate_to: localhost
+              
+            - name: Attempt emergency recovery
+              include_tasks: emergency-recovery.yml
+              
+            - name: Trigger failure notification
+              debug:
+                msg: "Triggering failure notification handler"
+              notify: reboot failed
+              
+            - name: Fail the play for this host
+              fail:
+                msg: "{{ reboot_error_msg }}"
+                
+      always:
+        - name: Record reboot attempt
+          lineinfile:
+            path: /var/log/ansible-reboot/reboot-attempts.log
+            line: "{{ ansible_date_time.iso8601 }} - {{ inventory_hostname }} - {{ 'SUCCESS' if reboot_result is defined and reboot_result.elapsed is defined else 'FAILED' }}"
+            create: yes
+          delegate_to: localhost
+          
+  post_tasks:
+    - name: Post-reboot validation with error handling
+      block:
+        - name: Wait for system to be fully ready
+          wait_for:
+            timeout: 60
+          delegate_to: localhost
+          
+        - name: Comprehensive system health check
+          include_tasks: health-check.yml
+          
+        - name: Generate reboot report
+          template:
+            src: reboot-report.j2
+            dest: "/tmp/reboot-report-{{ inventory_hostname }}-{{ ansible_date_time.epoch }}.txt"
+          delegate_to: localhost
+          
+      rescue:
+        - name: Handle post-reboot validation failures
+          debug:
+            msg: "Post-reboot validation failed, but system appears to be running"
+            
+        - name: Mark system for manual review
+          lineinfile:
+            path: /var/log/ansible-reboot/manual-review.log
+            line: "{{ ansible_date_time.iso8601 }} - {{ inventory_hostname }} - Post-reboot validation failed"
+            create: yes
+          delegate_to: localhost
