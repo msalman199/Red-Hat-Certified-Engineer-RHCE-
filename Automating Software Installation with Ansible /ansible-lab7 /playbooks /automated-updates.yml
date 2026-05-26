@@ -1,0 +1,113 @@
+---
+- name: Automated System Updates with Safety Checks
+  hosts: all
+  become: yes
+  gather_facts: yes
+  serial: 1  # Update one host at a time for safety
+  
+  vars:
+    update_types:
+      - security
+      - bugfix
+    
+    reboot_required_packages:
+      - kernel
+      - glibc
+      - systemd
+    
+    maintenance_window:
+      start_hour: 2
+      end_hour: 4
+    
+  pre_tasks:
+    - name: Check if system is in maintenance window
+      fail:
+        msg: "Updates can only be performed between {{ maintenance_window.start_hour }}:00 and {{ maintenance_window.end_hour }}:00"
+      when: 
+        - ansible_date_time.hour | int < maintenance_window.start_hour
+        - ansible_date_time.hour | int > maintenance_window.end_hour
+      tags: never  # Skip this check by default
+    
+    - name: Create pre-update system snapshot
+      shell: |
+        df -h > /tmp/pre-update-disk-usage.txt
+        rpm -qa | sort > /tmp/pre-update-packages.txt
+        systemctl list-units --state=active > /tmp/pre-update-services.txt
+      changed_when: false
+  
+  tasks:
+    - name: Check for available security updates
+      dnf:
+        security: yes
+        list: updates
+      register: security_updates
+      when: ansible_os_family == "RedHat"
+    
+    - name: Install security updates only
+      dnf:
+        name: "*"
+        state: latest
+        security: yes
+        update_only: yes
+      register: security_update_result
+      when: 
+        - ansible_os_family == "RedHat"
+        - security_updates.results | length > 0
+    
+    - name: Check for available bugfix updates
+      dnf:
+        bugfix: yes
+        list: updates
+      register: bugfix_updates
+      when: ansible_os_family == "RedHat"
+    
+    - name: Install bugfix updates
+      dnf:
+        name: "*"
+        state: latest
+        bugfix: yes
+        update_only: yes
+      register: bugfix_update_result
+      when: 
+        - ansible_os_family == "RedHat"
+        - bugfix_updates.results | length > 0
+    
+    - name: Check if reboot is required
+      shell: |
+        if [ -f /var/run/reboot-required ]; then
+          echo "reboot_required"
+        elif rpm -q --last kernel | head -1 | grep "$(date +%a\ %b\ %d)" > /dev/null; then
+          echo "reboot_required"
+        else
+          echo "no_reboot_required"
+        fi
+      register: reboot_check
+      changed_when: false
+    
+    - name: Create post-update system snapshot
+      shell: |
+        df -h > /tmp/post-update-disk-usage.txt
+        rpm -qa | sort > /tmp/post-update-packages.txt
+        systemctl list-units --state=active > /tmp/post-update-services.txt
+      changed_when: false
+    
+    - name: Generate update report
+      template:
+        src: update-report.j2
+        dest: /tmp/update-report-{{ ansible_date_time.epoch }}.txt
+      vars:
+        security_updates_installed: "{{ security_update_result.changed | default(false) }}"
+        bugfix_updates_installed: "{{ bugfix_update_result.changed | default(false) }}"
+        reboot_required: "{{ reboot_check.stdout == 'reboot_required' }}"
+  
+  post_tasks:
+    - name: Schedule reboot if required
+      reboot:
+        reboot_timeout: 300
+        connect_timeout: 20
+        test_command: uptime
+      when: 
+        - reboot_check.stdout == "reboot_required"
+        - ansible_reboot_required | default(false)
+      tags: never  # Manual tag to control reboots
+EOF
