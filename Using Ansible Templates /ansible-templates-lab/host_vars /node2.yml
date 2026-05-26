@@ -1,0 +1,6 @@
+apache_max_clients: 100
+app_environment: development
+custom_modules:
+  - mod_rewrite
+  - mod_headers
+EOF
