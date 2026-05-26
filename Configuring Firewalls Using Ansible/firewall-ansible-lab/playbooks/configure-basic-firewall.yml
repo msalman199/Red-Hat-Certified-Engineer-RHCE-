@@ -1,0 +1,46 @@
+---
+- name: Configure Firewalld for Web Services
+  hosts: webservers
+  become: yes
+  vars:
+    web_services:
+      - http
+      - https
+    firewall_zone: public
+
+  tasks:
+    - name: Ensure firewalld is installed
+      package:
+        name: firewalld
+        state: present
+
+    - name: Ensure firewalld service is running and enabled
+      systemd:
+        name: firewalld
+        state: started
+        enabled: yes
+
+    - name: Allow web services through firewall
+      firewalld:
+        service: "{{ item }}"
+        zone: "{{ firewall_zone }}"
+        permanent: yes
+        state: enabled
+        immediate: yes
+      loop: "{{ web_services }}"
+      notify: reload firewalld
+
+    - name: Verify firewall rules are active
+      command: firewall-cmd --list-services --zone={{ firewall_zone }}
+      register: active_services
+      changed_when: false
+
+    - name: Display active services
+      debug:
+        msg: "Active services in {{ firewall_zone }} zone: {{ active_services.stdout }}"
+
+  handlers:
+    - name: reload firewalld
+      systemd:
+        name: firewalld
+        state: reloaded
