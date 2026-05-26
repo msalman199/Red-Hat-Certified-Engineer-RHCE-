@@ -1,0 +1,81 @@
+---
+- name: Configure Database for Environment
+  hosts: databases
+  become: yes
+  vars:
+    mysql_root_password: "root_password_{{ environment_name }}"
+    
+  tasks:
+    - name: Display Database Configuration
+      debug:
+        msg: |
+          Configuring database for {{ environment_name }}
+          Database Name: {{ database_name }}
+          Database User: {{ database_user }}
+          Backup Enabled: {{ backup_enabled }}
+      tags:
+        - info
+        - database
+
+    - name: Install MySQL/MariaDB
+      package:
+        name:
+          - mariadb-server
+          - mariadb-client
+          - python3-pymysql
+        state: present
+      tags:
+        - packages
+        - database
+
+    - name: Start and enable MariaDB
+      systemd:
+        name: mariadb
+        state: started
+        enabled: yes
+      tags:
+        - services
+        - database
+
+    - name: Create application database
+      mysql_db:
+        name: "{{ database_name }}"
+        state: present
+        login_unix_socket: /var/run/mysqld/mysqld.sock
+      tags:
+        - database
+        - setup
+
+    - name: Create database user
+      mysql_user:
+        name: "{{ database_user }}"
+        password: "{{ database_password }}"
+        priv: "{{ database_name }}.*:ALL"
+        state: present
+        login_unix_socket: /var/run/mysqld/mysqld.sock
+      tags:
+        - database
+        - users
+
+    - name: Configure database backup (production/staging only)
+      cron:
+        name: "Database backup for {{ database_name }}"
+        minute: "0"
+        hour: "2"
+        job: "mysqldump {{ database_name }} > /backup/{{ database_name }}_$(date +%Y%m%d).sql"
+        user: root
+      when: backup_enabled | bool
+      tags:
+        - backup
+        - database
+
+    - name: Create backup directory
+      file:
+        path: /backup
+        state: directory
+        mode: '0755'
+      when: backup_enabled | bool
+      tags:
+        - backup
+        - directories
+EOF
