@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Welcome to {{ ansible_hostname }}</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        .header { color: #333; text-align: center; }
+        .info { background-color: #f4f4f4; padding: 20px; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <h1 class="header">Web Server Successfully Deployed!</h1>
+    <div class="info">
+        <h2>Server Information:</h2>
+        <p><strong>Hostname:</strong> {{ ansible_hostname }}</p>
+        <p><strong>IP Address:</strong> {{ ansible_default_ipv4.address }}</p>
+        <p><strong>Operating System:</strong> {{ ansible_distribution }} {{ ansible_distribution_version }}</p>
+        <p><strong>Web Server:</strong> {{ webserver_package }}</p>
+        <p><strong>Port:</strong> {{ webserver_port }}</p>
+        <p><strong>Document Root:</strong> {{ webserver_document_root }}</p>
+        <p><strong>Deployed by:</strong> Ansible Role</p>
+    </div>
+</body>
+</html>
