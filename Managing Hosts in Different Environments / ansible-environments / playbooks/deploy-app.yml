@@ -1,0 +1,120 @@
+---
+- name: Deploy Application Across Environments
+  hosts: webservers
+  become: yes
+  vars:
+    app_name: "myapp"
+    app_user: "appuser"
+    app_directory: "/opt/{{ app_name }}"
+    
+  tasks:
+    - name: Display Environment Information
+      debug:
+        msg: |
+          Deploying to {{ environment_name }} environment
+          App Version: {{ app_version }}
+          Database: {{ database_name }}
+          Log Level: {{ log_level }}
+      tags:
+        - info
+        - deploy
+
+    - name: Create application user
+      user:
+        name: "{{ app_user }}"
+        system: yes
+        shell: /bin/bash
+        home: "{{ app_directory }}"
+        create_home: yes
+      tags:
+        - setup
+        - users
+
+    - name: Create application directory
+      file:
+        path: "{{ app_directory }}"
+        state: directory
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+        mode: '0755'
+      tags:
+        - setup
+        - directories
+
+    - name: Install required packages
+      package:
+        name:
+          - python3
+          - python3-pip
+          - nginx
+        state: present
+      tags:
+        - packages
+        - setup
+
+    - name: Configure application settings
+      template:
+        src: app_config.j2
+        dest: "{{ app_directory }}/config.yml"
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+        mode: '0644'
+      notify: restart application
+      tags:
+        - config
+        - deploy
+
+    - name: Configure nginx for application
+      template:
+        src: nginx_app.j2
+        dest: /etc/nginx/sites-available/{{ app_name }}
+        backup: yes
+      notify: restart nginx
+      tags:
+        - webserver
+        - config
+
+    - name: Enable nginx site
+      file:
+        src: /etc/nginx/sites-available/{{ app_name }}
+        dest: /etc/nginx/sites-enabled/{{ app_name }}
+        state: link
+      notify: restart nginx
+      tags:
+        - webserver
+        - config
+
+    - name: Configure firewall rules
+      ufw:
+        rule: allow
+        port: "{{ item.port }}"
+        proto: "{{ item.protocol }}"
+        src: "{{ item.source }}"
+      loop: "{{ firewall_rules }}"
+      when: firewall_rules is defined
+      tags:
+        - security
+        - firewall
+
+    - name: Start and enable nginx
+      systemd:
+        name: nginx
+        state: started
+        enabled: yes
+      tags:
+        - services
+        - webserver
+
+  handlers:
+    - name: restart application
+      systemd:
+        name: "{{ app_name }}"
+        state: restarted
+      listen: restart application
+
+    - name: restart nginx
+      systemd:
+        name: nginx
+        state: restarted
+      listen: restart nginx
+EOF
