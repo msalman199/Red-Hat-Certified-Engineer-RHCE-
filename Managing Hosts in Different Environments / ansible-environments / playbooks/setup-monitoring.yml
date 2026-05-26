@@ -1,0 +1,47 @@
+---
+- name: Setup Monitoring for Environment
+  hosts: monitoring
+  become: yes
+  
+  tasks:
+    - name: Display monitoring setup info
+      debug:
+        msg: |
+          Setting up monitoring for {{ environment_name }}
+          Monitoring enabled: {{ monitoring_enabled }}
+      tags:
+        - info
+        - monitoring
+
+    - name: Install monitoring tools
+      package:
+        name:
+          - htop
+          - iotop
+          - netstat-nat
+          - sysstat
+        state: present
+      when: monitoring_enabled | bool
+      tags:
+        - monitoring
+        - packages
+
+    - name: Configure system monitoring
+      template:
+        src: monitoring_config.j2
+        dest: /etc/monitoring/config.yml
+        mode: '0644'
+      when: monitoring_enabled | bool
+      tags:
+        - monitoring
+        - config
+
+    - name: Setup log rotation for application logs
+      template:
+        src: logrotate_app.j2
+        dest: /etc/logrotate.d/{{ app_name | default('myapp') }}
+        mode: '0644'
+      tags:
+        - monitoring
+        - logs
+EOF
