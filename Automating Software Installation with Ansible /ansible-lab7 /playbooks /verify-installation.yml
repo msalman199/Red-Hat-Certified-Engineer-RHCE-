@@ -1,0 +1,63 @@
+---
+- name: Verify Package Installation and Configuration
+  hosts: all
+  become: yes
+  gather_facts: yes
+  
+  tasks:
+    - name: Check if common packages are installed
+      package_facts:
+        manager: rpm
+    
+    - name: Verify essential packages
+      assert:
+        that:
+          - "'vim' in ansible_facts.packages"
+          - "'curl' in ansible_facts.packages"
+          - "'wget' in ansible_facts.packages"
+          - "'git' in ansible_facts.packages"
+        fail_msg: "One or more essential packages are missing"
+        success_msg: "All essential packages are installed"
+    
+    - name: Check web server status (webservers only)
+      systemd:
+        name: httpd
+      register: httpd_status
+      when: inventory_hostname in groups['webservers']
+    
+    - name: Verify web server is running
+      assert:
+        that:
+          - httpd_status.status.ActiveState == "active"
+        fail_msg: "Apache web server is not running"
+        success_msg: "Apache web server is running correctly"
+      when: inventory_hostname in groups['webservers']
+    
+    - name: Check database server status (databases only)
+      systemd:
+        name: mariadb
+      register: mariadb_status
+      when: inventory_hostname in groups['databases']
+    
+    - name: Verify database server is running
+      assert:
+        that:
+          - mariadb_status.status.ActiveState == "active"
+        fail_msg: "MariaDB database server is not running"
+        success_msg: "MariaDB database server is running correctly"
+      when: inventory_hostname in groups['databases']
+    
+    - name: Generate verification report
+      copy:
+        content: |
+          Verification Report - {{ ansible_date_time.iso8601 }}
+          =============================================
+          Hostname: {{ inventory_hostname }}
+          Status: PASSED
+          
+          Installed Packages: {{ ansible_facts.packages.keys() | list | length }}
+          Services Running: {{ ansible_facts.services.keys() | select('match', '.*running.*') | list | length }}
+          
+          System Health: OK
+        dest: /tmp/verification-report-{{ inventory_hostname }}.txt
+EOF
