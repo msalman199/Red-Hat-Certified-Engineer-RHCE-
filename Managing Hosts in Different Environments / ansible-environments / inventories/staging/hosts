@@ -1,0 +1,19 @@
+[webservers]
+staging-server ansible_host=192.168.1.20 ansible_user=ec2-user
+
+[databases]
+staging-server
+
+[loadbalancers]
+staging-server
+
+[staging:children]
+webservers
+databases
+loadbalancers
+
+[staging:vars]
+environment=staging
+app_port=8080
+debug_mode=false
+EOF
