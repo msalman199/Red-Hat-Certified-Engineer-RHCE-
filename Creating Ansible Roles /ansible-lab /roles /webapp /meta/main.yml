@@ -1,0 +1,25 @@
+---
+galaxy_info:
+  author: Your Name
+  description: A full-stack web application role
+  company: Al Nafi Training
+  license: MIT
+  min_ansible_version: 2.9
+  platforms:
+    - name: EL
+      versions:
+        - 7
+        - 8
+        - 9
+  galaxy_tags:
+    - webapp
+    - fullstack
+
+dependencies:
+  - role: database
+    vars:
+      db_name: webapp_production
+      db_user: webapp_prod
+  - role: webserver
+    vars:
+      webserver_port: 8080
