@@ -1,0 +1,43 @@
+---
+- name: Check if system is partially responsive
+  ping:
+  register: ping_result
+  ignore_errors: yes
+  
+- name: Attempt to connect via alternative methods
+  block:
+    - name: Try connecting with longer timeout
+      wait_for_connection:
+        timeout: 120
+        delay: 10
+      register: connection_result
+      
+    - name: Check system status if connected
+      command: systemctl is-system-running
+      register: system_status
+      when: connection_result is succeeded
+      
+  rescue:
+    - name: System appears to be completely unresponsive
+      debug:
+        msg: "System {{ inventory_hostname }} is not responding to connection attempts"
+        
+    - name: Log critical failure
+      lineinfile:
+        path: /var/log/ansible-reboot/critical-failures.log
+        line: "{{ ansible_date_time.iso8601 }} - CRITICAL: {{ inventory_hostname }} - System unresponsive after reboot"
+        create: yes
+      delegate_to: localhost
+      
+- name: Attempt basic service recovery
+  block:
+    - name: Restart critical services
+      systemd:
+        name: "{{ item }}"
+        state: restarted
+      loop:
+        - sshd
+        - NetworkManager
+      ignore_errors: yes
+      
+  when: connection_result is succeeded
