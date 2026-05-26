@@ -1,0 +1,34 @@
+---
+# Production Environment Variables
+environment_name: "production"
+app_version: "v1.1.5"
+database_name: "myapp_prod"
+database_user: "prod_user"
+database_password: "prod_very_secure_password"
+log_level: "warn"
+backup_enabled: true
+monitoring_enabled: true
+
+# Application Configuration
+app_config:
+  max_connections: 200
+  timeout: 120
+  cache_enabled: true
+  
+# Security Settings
+firewall_rules:
+  - port: 22
+    protocol: tcp
+    source: "10.0.0.0/8"
+  - port: 80
+    protocol: tcp
+    source: "0.0.0.0/0"
+  - port: 443
+    protocol: tcp
+    source: "0.0.0.0/0"
+
+# SSL Configuration
+ssl_config:
+  cert_path: "/etc/ssl/certs/myapp.crt"
+  key_path: "/etc/ssl/private/myapp.key"
+EOF
