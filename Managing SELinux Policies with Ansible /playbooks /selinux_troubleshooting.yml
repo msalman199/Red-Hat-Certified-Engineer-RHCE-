@@ -1,0 +1,67 @@
+---
+- name: SELinux Troubleshooting and Diagnostics
+  hosts: managed_nodes
+  become: yes
+  
+  tasks:
+    - name: Install SELinux troubleshooting tools
+      yum:
+        name:
+          - setroubleshoot-server
+          - setroubleshoot
+          - policycoreutils-python-utils
+          - setools-console
+        state: present
+    
+    - name: Check for SELinux denials in audit log
+      shell: ausearch -m avc -ts today
+      register: selinux_denials
+      changed_when: false
+      failed_when: false
+    
+    - name: Count SELinux denials
+      set_fact:
+        denial_count: "{{ selinux_denials.stdout_lines | length }}"
+    
+    - name: Display denial summary
+      debug:
+        msg: "Found {{ denial_count }} SELinux denials today"
+    
+    - name: Generate SELinux denial report
+      shell: sealert -a /var/log/audit/audit.log
+      register: sealert_report
+      changed_when: false
+      failed_when: false
+      when: denial_count | int > 0
+    
+    - name: Save denial report to file
+      copy:
+        content: "{{ sealert_report.stdout }}"
+        dest: "/tmp/selinux_denial_report_{{ ansible_date_time.epoch }}.txt"
+      when: denial_count | int > 0
+    
+    - name: Check SELinux boolean status
+      shell: getsebool -a | grep -E "(httpd|ftp|samba|nfs)"
+      register: important_booleans
+      changed_when: false
+      failed_when: false
+    
+    - name: Display important SELinux booleans
+      debug:
+        var: important_booleans.stdout_lines
+    
+    - name: Check for mislabeled files
+      shell: find /var/www /etc/httpd -type f -exec ls -Z {} \; 2>/dev/null | head -20
+      register: web_file_contexts
+      changed_when: false
+      failed_when: false
+    
+    - name: Display web file contexts
+      debug:
+        msg: "Web file contexts sample:"
+        verbosity: 1
+    
+    - name: Display web file contexts details
+      debug:
+        var: web_file_contexts.stdout_lines
+      when: web_file_contexts.stdout_lines is defined
