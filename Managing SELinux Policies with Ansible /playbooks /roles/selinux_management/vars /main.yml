@@ -1,0 +1,15 @@
+---
+selinux_packages:
+  - policycoreutils
+  - policycoreutils-python-utils
+  - selinux-policy
+  - selinux-policy-targeted
+  - setroubleshoot-server
+  - setools-console
+
+default_selinux_booleans:
+  - { name: "httpd_can_network_connect", value: false }
+  - { name: "httpd_can_network_connect_db", value: false }
+  - { name: "httpd_execmem", value: false }
+  - { name: "httpd_enable_homedirs", value: false }
+  - { name: "httpd_use_nfs", value: false }
