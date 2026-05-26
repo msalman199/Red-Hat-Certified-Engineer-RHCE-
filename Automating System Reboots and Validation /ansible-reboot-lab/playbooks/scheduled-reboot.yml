@@ -1,0 +1,63 @@
+---
+- name: Scheduled Maintenance Reboot
+  hosts: managed_nodes
+  become: yes
+  gather_facts: yes
+  
+  vars:
+    maintenance_start: "02:00"
+    maintenance_end: "04:00"
+    timezone: "America/New_York"
+    
+  pre_tasks:
+    - name: Get current time
+      setup:
+        filter: ansible_date_time
+        
+    - name: Check if within maintenance window
+      set_fact:
+        in_maintenance_window: "{{ 
+          (ansible_date_time.hour | int >= maintenance_start.split(':')[0] | int) and 
+          (ansible_date_time.hour | int < maintenance_end.split(':')[0] | int) 
+        }}"
+        
+    - name: Display maintenance window status
+      debug:
+        msg: |
+          Current time: {{ ansible_date_time.time }}
+          Maintenance window: {{ maintenance_start }} - {{ maintenance_end }}
+          In window: {{ in_maintenance_window }}
+          
+    - name: Skip reboot if outside maintenance window
+      meta: end_host
+      when: not in_maintenance_window
+      
+    - name: Confirm maintenance window
+      debug:
+        msg: "Proceeding with reboot during maintenance window"
+  
+  tasks:
+    - name: Create maintenance log entry
+      lineinfile:
+        path: /var/log/maintenance.log
+        line: "{{ ansible_date_time.iso8601 }} - Maintenance reboot started"
+        create: yes
+        
+    - name: Notify users of impending reboot
+      command: wall "System will reboot in 2 minutes for scheduled maintenance"
+      
+    - name: Wait before reboot
+      wait_for:
+        timeout: 120
+      delegate_to: localhost
+      
+    - name: Perform maintenance reboot
+      reboot:
+        reboot_timeout: 600
+        msg: "Scheduled maintenance reboot"
+      register: maintenance_reboot
+      
+    - name: Log maintenance completion
+      lineinfile:
+        path: /var/log/maintenance.log
+        line: "{{ ansible_date_time.iso8601 }} - Maintenance reboot completed in {{ maintenance_reboot.elapsed }} seconds"
