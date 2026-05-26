@@ -1,0 +1,29 @@
+<?php
+require_once 'config.php';
+
+echo "<h1>Welcome to " . APP_NAME . "</h1>";
+echo "<p>Version: " . APP_VERSION . "</p>";
+echo "<p>Server: " . gethostname() . "</p>";
+
+try {
+    $pdo = new PDO("mysql:host=" . DB_HOST . ";port=" . DB_PORT . ";dbname=" . DB_NAME, DB_USER, DB_PASS);
+    echo "<p style='color: green;'>Database connection: SUCCESS</p>";
+    
+    // Create a simple table and insert data
+    $pdo->exec("CREATE TABLE IF NOT EXISTS visitors (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        visit_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        ip_address VARCHAR(45)
+    )");
+    
+    $stmt = $pdo->prepare("INSERT INTO visitors (ip_address) VALUES (?)");
+    $stmt->execute([$_SERVER['REMOTE_ADDR']]);
+    
+    $stmt = $pdo->query("SELECT COUNT(*) as count FROM visitors");
+    $count = $stmt->fetch()['count'];
+    echo "<p>Total visits: " . $count . "</p>";
+    
+} catch(PDOException $e) {
+    echo "<p style='color: red;'>Database connection failed: " . $e->getMessage() . "</p>";
+}
+?>
