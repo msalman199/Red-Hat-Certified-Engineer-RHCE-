@@ -1,0 +1,31 @@
+---
+- name: Selective Check Mode Example
+  hosts: localhost
+  
+  tasks:
+    - name: Always gather information (runs in check mode)
+      setup:
+      check_mode: no
+    
+    - name: Display system info (always runs)
+      debug:
+        msg: "System: {{ ansible_hostname }}, OS: {{ ansible_distribution }}"
+      check_mode: no
+    
+    - name: Simulate file creation
+      file:
+        path: /tmp/test_file.txt
+        state: touch
+        mode: '0644'
+    
+    - name: Check if file exists (always runs)
+      stat:
+        path: /tmp/test_file.txt
+      register: file_check
+      check_mode: no
+    
+    - name: Report file status
+      debug:
+        msg: "File exists: {{ file_check.stat.exists }}"
+      check_mode: no
+EOF
