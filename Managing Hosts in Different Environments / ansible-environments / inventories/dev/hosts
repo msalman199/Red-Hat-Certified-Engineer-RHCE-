@@ -1,0 +1,15 @@
+[webservers]
+dev-server ansible_host=192.168.1.10 ansible_user=ec2-user
+
+[databases]
+dev-server
+
+[dev:children]
+webservers
+databases
+
+[dev:vars]
+environment=development
+app_port=8080
+debug_mode=true
+EOF
