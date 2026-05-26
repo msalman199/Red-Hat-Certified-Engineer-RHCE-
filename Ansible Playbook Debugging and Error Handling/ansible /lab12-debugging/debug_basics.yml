@@ -1,0 +1,29 @@
+---
+- name: Debug Module Basics
+  hosts: localhost
+  gather_facts: yes
+  vars:
+    custom_message: "Hello from Ansible debugging lab"
+    server_count: 3
+    
+  tasks:
+    - name: Display a simple debug message
+      debug:
+        msg: "This is a basic debug message"
+    
+    - name: Display variable content
+      debug:
+        var: custom_message
+    
+    - name: Display multiple variables
+      debug:
+        msg: "Server count is {{ server_count }} and message is {{ custom_message }}"
+    
+    - name: Display system facts
+      debug:
+        var: ansible_hostname
+    
+    - name: Display facts with custom formatting
+      debug:
+        msg: "Running on {{ ansible_hostname }} with {{ ansible_processor_cores }} CPU cores"
+EOF
