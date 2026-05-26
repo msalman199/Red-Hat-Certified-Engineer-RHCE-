@@ -1,0 +1,100 @@
+---
+- name: Comprehensive Group and Membership Management
+  hosts: all
+  become: yes
+  vars:
+    organizational_groups:
+      - name: developers
+        gid: 3001
+        description: "Software Development Team"
+        members: ["john_doe", "alice_dev", "bob_coder"]
+      - name: sysadmins
+        gid: 3002
+        description: "System Administrators"
+        members: ["jane_smith", "admin_user"]
+      - name: database_admins
+        gid: 3003
+        description: "Database Administration Team"
+        members: ["db_admin", "jane_smith"]
+      - name: project_alpha
+        gid: 3004
+        description: "Project Alpha Team Members"
+        members: ["john_doe", "jane_smith", "project_lead"]
+
+    users_to_create:
+      - username: alice_dev
+        full_name: "Alice Developer"
+        primary_group: developers
+      - username: bob_coder
+        full_name: "Bob Coder"
+        primary_group: developers
+      - username: admin_user
+        full_name: "Admin User"
+        primary_group: sysadmins
+      - username: db_admin
+        full_name: "Database Admin"
+        primary_group: database_admins
+      - username: project_lead
+        full_name: "Project Lead"
+        primary_group: project_alpha
+
+  tasks:
+    - name: Create organizational groups
+      group:
+        name: "{{ item.name }}"
+        gid: "{{ item.gid }}"
+        state: present
+      loop: "{{ organizational_groups }}"
+
+    - name: Create users with primary groups
+      user:
+        name: "{{ item.username }}"
+        comment: "{{ item.full_name }}"
+        group: "{{ item.primary_group }}"
+        shell: /bin/bash
+        createhome: yes
+        password: "{{ '$6$salt$' + (item.username + 'pass123') | password_hash('sha512', 'salt') }}"
+        state: present
+      loop: "{{ users_to_create }}"
+
+    - name: Add users to secondary groups
+      user:
+        name: "{{ item.1 }}"
+        groups: "{{ item.0.name }}"
+        append: yes
+      with_subelements:
+        - "{{ organizational_groups }}"
+        - members
+      ignore_errors: yes
+
+    - name: Verify group memberships
+      shell: groups {{ item.1 }}
+      with_subelements:
+        - "{{ organizational_groups }}"
+        - members
+      register: group_verification
+      ignore_errors: yes
+
+    - name: Display group membership verification
+      debug:
+        msg: "User {{ item.item.1 }} groups: {{ item.stdout }}"
+      loop: "{{ group_verification.results }}"
+      when: item.stdout is defined
+
+    - name: Create group directories with proper permissions
+      file:
+        path: "/shared/{{ item.name }}"
+        state: directory
+        owner: root
+        group: "{{ item.name }}"
+        mode: '2775'
+      loop: "{{ organizational_groups }}"
+
+    - name: Set up sudo privileges for sysadmins group
+      lineinfile:
+        path: /etc/sudoers.d/sysadmins
+        line: "%sysadmins ALL=(ALL) NOPASSWD: ALL"
+        create: yes
+        mode: '0440'
+        validate: 'visudo -cf %s'
+EOF
