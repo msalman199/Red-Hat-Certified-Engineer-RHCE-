@@ -1,0 +1,31 @@
+---
+# Production environment group variables
+environment_type: "production"
+monitoring_enabled: true
+logging_level: "info"
+backup_enabled: true
+
+# Common production settings
+timezone: "America/New_York"
+ntp_servers:
+  - "pool.ntp.org"
+  - "time.google.com"
+
+# Security settings
+security_policies:
+  password_complexity: true
+  session_timeout: 3600
+  failed_login_attempts: 3
+  account_lockout_duration: 1800
+
+# Monitoring configuration
+monitoring:
+  agent: "node_exporter"
+  metrics_port: 9100
+  scrape_interval: "15s"
+
+# Log management
+log_management:
+  centralized_logging: true
+  log_retention_days: 90
+  log_rotation: "daily"
