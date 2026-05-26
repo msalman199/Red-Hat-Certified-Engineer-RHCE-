@@ -1,0 +1,104 @@
+---
+- name: Automated SELinux Issue Resolution
+  hosts: managed_nodes
+  become: yes
+  vars:
+    common_selinux_booleans:
+      - { name: "httpd_can_network_connect", value: "on" }
+      - { name: "httpd_can_network_connect_db", value: "on" }
+      - { name: "httpd_execmem", value: "off" }
+      - { name: "httpd_enable_homedirs", value: "off" }
+  
+  tasks:
+    - name: Create test scenario - Apache access issue
+      block:
+        - name: Create test web directory with wrong context
+          file:
+            path: /var/test_web
+            state: directory
+            owner: apache
+            group: apache
+            mode: '0755'
+        
+        - name: Create test file with wrong context
+          copy:
+            content: "<h1>Test Page</h1>"
+            dest: /var/test_web/index.html
+            owner: apache
+            group: apache
+            mode: '0644'
+        
+        - name: Intentionally set wrong SELinux context
+          command: chcon -t admin_home_t /var/test_web/index.html
+          changed_when: true
+    
+    - name: Diagnose the issue
+      block:
+        - name: Check current context of problematic file
+          command: ls -Z /var/test_web/index.html
+          register: wrong_context
+          changed_when: false
+        
+        - name: Display problematic context
+          debug:
+            msg: "Current context: {{ wrong_context.stdout }}"
+        
+        - name: Check what the context should be
+          command: matchpathcon /var/test_web/index.html
+          register: correct_context
+          changed_when: false
+          failed_when: false
+        
+        - name: Display correct context
+          debug:
+            msg: "Expected context: {{ correct_context.stdout }}"
+    
+    - name: Resolve the issue
+      block:
+        - name: Fix file context using restorecon
+          command: restorecon -v /var/test_web/index.html
+          register: context_fix
+          changed_when: "'restorecon reset' in context_fix.stdout"
+        
+        - name: Verify context fix
+          command: ls -Z /var/test_web/index.html
+          register: fixed_context
+          changed_when: false
+        
+        - name: Display fixed context
+          debug:
+            msg: "Fixed context: {{ fixed_context.stdout }}"
+    
+    - name: Configure common SELinux booleans
+      seboolean:
+        name: "{{ item.name }}"
+        state: "{{ item.value }}"
+        persistent: yes
+      loop: "{{ common_selinux_booleans }}"
+    
+    - name: Create SELinux monitoring script
+      copy:
+        content: |
+          #!/bin/bash
+          # SELinux Monitoring Script
+          echo "=== SELinux Status ==="
+          sestatus
+          echo ""
+          echo "=== Recent Denials ==="
+          ausearch -m avc -ts recent 2>/dev/null | tail -5
+          echo ""
+          echo "=== Important Booleans ==="
+          getsebool -a | grep -E "(httpd|ftp|samba)" | grep " on"
+        dest: /usr/local/bin/selinux_monitor.sh
+        mode: '0755'
+        owner: root
+        group: root
+    
+    - name: Run SELinux monitoring script
+      command: /usr/local/bin/selinux_monitor.sh
+      register: monitoring_output
+      changed_when: false
+    
+    - name: Display monitoring results
+      debug:
+        var: monitoring_output.stdout_lines
