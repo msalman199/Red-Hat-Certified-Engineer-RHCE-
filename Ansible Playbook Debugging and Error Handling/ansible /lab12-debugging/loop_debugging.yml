@@ -1,0 +1,26 @@
+---
+- name: Loop Debugging Examples
+  hosts: localhost
+  vars:
+    items_list:
+      - name: "item1"
+        value: 10
+      - name: "item2"
+        value: 20
+      - name: "item3"
+        value: 30
+    
+  tasks:
+    - name: Debug loop items
+      debug:
+        msg: "Processing {{ item.name }} with value {{ item.value }} (Index: {{ ansible_loop.index }})"
+      loop: "{{ items_list }}"
+      loop_control:
+        extended: yes
+    
+    - name: Debug with conditional loop
+      debug:
+        msg: "High value item: {{ item.name }}"
+      loop: "{{ items_list }}"
+      when: item.value > 15
+EOF
