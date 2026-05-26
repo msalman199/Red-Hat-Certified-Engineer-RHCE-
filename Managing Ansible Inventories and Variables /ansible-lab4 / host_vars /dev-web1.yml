@@ -1,0 +1,17 @@
+---
+# Host-specific variables for dev-web1
+server_role: primary_web
+cpu_cores: 2
+memory_gb: 4
+disk_space_gb: 50
+
+# Application-specific settings
+app_version: "2.1.0-dev"
+ssl_enabled: false
+monitoring_enabled: true
+
+# Custom configuration
+custom_config:
+  cache_size: "128M"
+  session_timeout: 1800
+  upload_max_size: "10M"
