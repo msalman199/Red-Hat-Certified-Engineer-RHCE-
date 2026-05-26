@@ -1,0 +1,88 @@
+---
+- name: Complete Debugging and Error Handling Lab
+  hosts: localhost
+  gather_facts: yes
+  vars:
+    debug_enabled: true
+    environment: "{{ ansible_env.ENVIRONMENT | default('development') }}"
+    required_services:
+      - name: "database"
+        port: 3306
+        critical: true
+      - name: "cache"
+        port: 6379
+        critical: false
+      - name: "web"
+        port: 80
+        critical: true
+    
+  tasks:
+    - name: Environment validation and debugging
+      block:
+        - name: Display environment information
+          debug:
+            msg: |
+              Environment: {{ environment }}
+              Hostname: {{ ansible_hostname }}
+              OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
+              Memory: {{ (ansible_memtotal_mb / 1024) | round(1) }}GB
+          when: debug_enabled
+        
+        - name: Validate environment setting
+          fail:
+            msg: "Invalid environment '{{ environment }}'. Must be 'development', 'staging', or 'production'"
+          when: environment not in ['development', 'staging', 'production']
+        
+        - name: Check system resources
+          block:
+            - name: Memory check
+              fail:
+                msg: "Insufficient memory. Required: 2GB, Available: {{ (ansible_memtotal_mb / 1024) | round(1) }}GB"
+              when: (ansible_memtotal_mb / 1024) < 2
+            
+            - name: Disk space check (simulation)
+              set_fact:
+                disk_usage: 85
+            
+            - name: Fail if disk usage too high
+              fail:
+                msg: "Disk usage too high: {{ disk_usage }}%"
+              when: disk_usage > 90
+          
+          rescue:
+            - name: Handle resource constraints
+              debug:
+                msg: "Resource constraints detected, adjusting configuration"
+            
+            - name: Set resource-aware configuration
+              set_fact:
+                optimized_config: true
+        
+        - name: Service validation loop
+          include_tasks: service_check.yml
+          loop: "{{ required_services }}"
+          loop_control:
+            loop_var: service
+      
+      rescue:
+        - name: Handle validation errors
+          debug:
+            msg: "Validation failed, implementing recovery procedures"
+        
+        - name: Log error details
+          debug:
+            msg: "Error occurred during environment validation"
+      
+      always:
+        - name: Generate validation report
+          debug:
+            msg: |
+              Validation Summary:
+              - Environment: {{ environment }}
+              - Optimized Config: {{ optimized_config | default(false) }}
+              - Timestamp: {{ ansible_date_time.iso8601 }}
+
+    - name: Final status check
+      debug:
+        msg: "Lab completed successfully - all debugging techniques demonstrated"
+EOF
