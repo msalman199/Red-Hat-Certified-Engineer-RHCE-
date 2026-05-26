@@ -1,0 +1,7 @@
+apache_max_clients: 200
+app_environment: production
+custom_modules:
+  - mod_rewrite
+  - mod_ssl
+  - mod_headers
+EOF
