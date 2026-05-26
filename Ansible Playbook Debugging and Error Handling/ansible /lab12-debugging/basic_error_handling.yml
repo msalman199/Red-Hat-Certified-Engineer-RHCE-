@@ -1,0 +1,33 @@
+---
+- name: Basic Error Handling with Block and Rescue
+  hosts: localhost
+  
+  tasks:
+    - name: Error handling example
+      block:
+        - name: Task that might fail
+          command: /bin/false
+          register: result
+        
+        - name: This won't execute due to previous failure
+          debug:
+            msg: "This message won't appear"
+      
+      rescue:
+        - name: Handle the error
+          debug:
+            msg: "An error occurred, but we're handling it gracefully"
+        
+        - name: Log error details
+          debug:
+            msg: "Error handling activated for failed task"
+      
+      always:
+        - name: This always runs
+          debug:
+            msg: "Cleanup or final actions go here"
+    
+    - name: Continue with next task
+      debug:
+        msg: "Playbook continues after error handling"
+EOF
