@@ -1,0 +1,102 @@
+# Virtual Host Configuration for {{ ansible_hostname }}
+# Generated on {{ ansible_date_time.iso8601 }}
+
+{% set server_name = ansible_fqdn %}
+{% set doc_root = apache_document_root %}
+
+<VirtualHost *:{{ apache_listen_port }}>
+    ServerName {{ server_name }}
+    {% if ansible_hostname != ansible_fqdn %}
+    ServerAlias {{ ansible_hostname }}
+    {% endif %}
+    
+    DocumentRoot {{ doc_root }}
+    
+    # Environment-specific configuration
+    {% if app_environment == 'production' %}
+    # Production settings
+    LogLevel error
+    ServerSignature Off
+    
+    # Security headers
+    Header always set X-Content-Type-Options nosniff
+    Header always set X-Frame-Options DENY
+    Header always set X-XSS-Protection "1; mode=block"
+    
+    {% elif app_environment == 'development' %}
+    # Development settings
+    LogLevel debug
+    ServerSignature On
+    
+    # Development headers
+    Header always set X-Debug-Mode "Enabled"
+    Header always set X-Developer "Ansible-Generated"
+    
+    {% else %}
+    # Default settings
+    LogLevel warn
+    ServerSignature Off
+    {% endif %}
+    
+    # Custom error pages based on system resources
+    {% if ansible_memtotal_mb > 1000 %}
+    ErrorDocument 404 /errors/404.html
+    ErrorDocument 500 /errors/500.html
+    {% else %}
+    ErrorDocument 404 "Resource not found on {{ ansible_hostname }}"
+    ErrorDocument 500 "Server error on {{ ansible_hostname }}"
+    {% endif %}
+    
+    # Directory configuration with dynamic permissions
+    <Directory "{{ doc_root }}">
+        Options {% if app_environment == 'development' %}Indexes {% endif %}FollowSymLinks
+        AllowOverride {% if app_environment == 'production' %}None{% else %}All{% endif %}
+        Require all granted
+        
+        {% if custom_modules is defined and 'mod_rewrite' in custom_modules %}
+        # Rewrite rules (mod_rewrite available)
+        RewriteEngine On
+        RewriteCond %{REQUEST_FILENAME} !-f
+        RewriteCond %{REQUEST_FILENAME} !-d
+        RewriteRule ^(.*)$ /index.html [L]
+        {% endif %}
+    </Directory>
+    
+    # Logging with hostname
+    ErrorLog logs/{{ ansible_hostname }}_error.log
+    CustomLog logs/{{ ansible_hostname }}_access.log combined
+    
+    # Performance tuning based on system specs
+    {% if ansible_processor_vcpus >= 4 %}
+    # Multi-core system optimizations
+    ThreadsPerChild {{ apache_threads_per_child * 2 }}
+    {% else %}
+    # Single/dual-core system settings
+    ThreadsPerChild {{ apache_threads_per_child }}
+    {% endif %}
+    
+</VirtualHost>
+
+{% if enable_ssl %}
+# SSL Virtual Host
+<VirtualHost *:{{ ssl_port }}>
+    ServerName {{ server_name }}
+    DocumentRoot {{ doc_root }}
+    
+    SSLEngine on
+    SSLCertificateFile /etc/pki/tls/certs/localhost.crt
+    SSLCertificateKeyFile /etc/pki/tls/private/localhost.key
+    
+    # SSL Security based on environment
+    {% if app_environment == 'production' %}
+    SSLProtocol all -SSLv2 -SSLv3 -TLSv1 -TLSv1.1
+    SSLCipherSuite ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384
+    {% else %}
+    SSLProtocol all -SSLv2 -SSLv3
+    {% endif %}
+    
+    ErrorLog logs/{{ ansible_hostname }}_ssl_error.log
+    CustomLog logs/{{ ansible_hostname }}_ssl_access.log combined
+</VirtualHost>
+{% endif %}
+EOF
