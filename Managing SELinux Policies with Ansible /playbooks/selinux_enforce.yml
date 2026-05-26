@@ -1,0 +1,64 @@
+---
+- name: Manage SELinux Enforcement Mode
+  hosts: managed_nodes
+  become: yes
+  vars:
+    selinux_mode: enforcing
+    selinux_policy: targeted
+  
+  tasks:
+    - name: Check current SELinux status
+      command: getenforce
+      register: current_selinux_status
+      changed_when: false
+      
+    - name: Display current SELinux status
+      debug:
+        msg: "Current SELinux status: {{ current_selinux_status.stdout }}"
+    
+    - name: Install SELinux management packages
+      yum:
+        name:
+          - policycoreutils
+          - policycoreutils-python-utils
+          - selinux-policy
+          - selinux-policy-targeted
+          - setroubleshoot-server
+          - setools-console
+        state: present
+    
+    - name: Configure SELinux to enforcing mode
+      selinux:
+        policy: "{{ selinux_policy }}"
+        state: "{{ selinux_mode }}"
+      register: selinux_change
+      notify: reboot_system
+    
+    - name: Verify SELinux configuration file
+      lineinfile:
+        path: /etc/selinux/config
+        regexp: '^SELINUX='
+        line: "SELINUX={{ selinux_mode }}"
+        backup: yes
+    
+    - name: Check if reboot is required
+      debug:
+        msg: "System reboot required: {{ selinux_change.reboot_required | default(false) }}"
+    
+    - name: Wait for system to come back online (if rebooted)
+      wait_for_connection:
+        connect_timeout: 20
+        sleep: 5
+        delay: 5
+        timeout: 300
+      when: selinux_change.reboot_required | default(false)
+  
+  handlers:
+    - name: reboot_system
+      reboot:
+        msg: "Rebooting system to apply SELinux changes"
+        connect_timeout: 5
+        reboot_timeout: 300
+        pre_reboot_delay: 0
+        post_reboot_delay: 30
+      when: selinux_change.reboot_required | default(false)
