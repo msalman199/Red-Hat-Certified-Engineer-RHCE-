@@ -1,0 +1,77 @@
+---
+- name: Advanced Package Management with DNF/YUM
+  hosts: all
+  become: yes
+  gather_facts: yes
+  
+  vars:
+    packages_to_install:
+      - name: development-tools
+        state: present
+        type: group
+      - name: nginx
+        state: present
+        type: package
+      - name: nodejs
+        state: present
+        type: package
+        version: "16*"
+    
+    packages_to_remove:
+      - sendmail
+      - postfix
+    
+    repositories:
+      - name: epel-release
+        state: present
+    
+  tasks:
+    - name: Install EPEL repository
+      dnf:
+        name: epel-release
+        state: present
+      when: ansible_os_family == "RedHat"
+    
+    - name: Install package groups
+      dnf:
+        name: "{{ item.name }}"
+        state: "{{ item.state }}"
+      loop: "{{ packages_to_install }}"
+      when: 
+        - item.type == "group"
+        - ansible_os_family == "RedHat"
+    
+    - name: Install specific package versions
+      dnf:
+        name: "{{ item.name }}-{{ item.version | default('*') }}"
+        state: "{{ item.state }}"
+      loop: "{{ packages_to_install }}"
+      when: 
+        - item.type == "package"
+        - ansible_os_family == "RedHat"
+    
+    - name: Remove unwanted packages
+      dnf:
+        name: "{{ packages_to_remove }}"
+        state: absent
+      when: ansible_os_family == "RedHat"
+    
+    - name: Clean package cache
+      dnf:
+        autoremove: yes
+        update_cache: yes
+      when: ansible_os_family == "RedHat"
+    
+    - name: Check for available updates
+      dnf:
+        list: updates
+      register: available_updates
+      when: ansible_os_family == "RedHat"
+    
+    - name: Display available updates
+      debug:
+        msg: "Available updates: {{ available_updates.results | length }}"
+      when: 
+        - ansible_os_family == "RedHat"
+        - available_updates is defined
+EOF
