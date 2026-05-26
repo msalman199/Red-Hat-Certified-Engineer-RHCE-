@@ -1,0 +1,9 @@
+---
+# defaults file for webserver
+webserver_package: httpd
+webserver_service: httpd
+webserver_port: 80
+webserver_document_root: /var/www/html
+webserver_index_file: index.html
+webserver_user: apache
+webserver_group: apache
