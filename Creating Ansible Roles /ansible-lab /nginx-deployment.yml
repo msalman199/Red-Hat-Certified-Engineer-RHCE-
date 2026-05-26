@@ -1,0 +1,83 @@
+---
+- name: Deploy Nginx Web Server with Security
+  hosts: webservers
+  become: yes
+  
+  vars:
+    nginx_vhosts:
+      - listen: "80"
+        server_name: "{{ ansible_default_ipv4.address }}"
+        root: "/var/www/html"
+        index: "index.html index.htm"
+        extra_parameters: |
+          location / {
+              try_files $uri $uri/ =404;
+          }
+          location /api/ {
+              proxy_pass http://localhost:3000/;
+              proxy_set_header Host $host;
+              proxy_set_header X-Real-IP $remote_addr;
+          }
+    
+    nginx_remove_default_vhost: true
+    
+    firewall_allowed_tcp_ports:
+      - "22"
+      - "80"
+      - "443"
+    
+    security_autoupdate_enabled: true
+    security_fail2ban_enabled: true
+
+  roles:
+    - geerlingguy.security
+    - geerlingguy.firewall
+    - geerlingguy.nginx
+
+  post_tasks:
+    - name: Create custom index page
+      copy:
+        content: |
+          <!DOCTYPE html>
+          <html>
+          <head>
+              <title>Nginx Deployed via Ansible Galaxy</title>
+              <style>
+                  body { font-family: Arial, sans-serif; margin: 40px; background-color: #f0f0f0; }
+                  .container { background-color: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+                  .header { color: #2c3e50; text-align: center; }
+                  .success { color: #27ae60; font-weight: bold; }
+              </style>
+          </head>
+          <body>
+              <div class="container">
+                  <h1 class="header">🚀 Nginx Successfully Deployed!</h1>
+                  <p class="success">This server was configured using Ansible Galaxy community roles.</p>
+                  <h3>Server Details:</h3>
+                  <ul>
+                      <li><strong>Hostname:</strong> {{ ansible_hostname }}</li>
+                      <li><strong>IP Address:</strong> {{ ansible_default_ipv4.address }}</li>
+                      <li><strong>OS:</strong> {{ ansible_distribution }} {{ ansible_distribution_version }}</li>
+                      <li><strong>Web Server:</strong> Nginx (via geerlingguy.nginx role)</li>
+                      <li><strong>Security:</strong> Enhanced (via geerlingguy.security role)</li>
+                      <li><strong>Firewall:</strong> Configured (via geerlingguy.firewall role)</li>
+                  </ul>
+                  <p><em>Deployed with ❤️ using Ansible</em></p>
+              </div>
+          </body>
+          </html>
+        dest: /var/www/html/index.html
+        owner: nginx
+        group: nginx
+        mode: '0644'
+
+    - name: Test Nginx is responding
+      uri:
+        url: "http://{{ ansible_default_ipv4.address }}"
+        method: GET
+        status_code: 200
+      delegate_to: localhost
+
+    - name: Display deployment success message
+      debug:
+        msg: "Nginx deployment completed successfully! Visit http://{{ ansible_default_ipv4.address }}"
