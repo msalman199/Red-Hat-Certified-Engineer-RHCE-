@@ -1,0 +1,33 @@
+System Update Report
+====================
+Date: {{ ansible_date_time.iso8601 }}
+Hostname: {{ inventory_hostname }}
+IP Address: {{ ansible_default_ipv4.address }}
+OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
+
+Update Summary:
+- Security Updates Installed: {{ security_updates_installed | ternary('Yes', 'No') }}
+- Bugfix Updates Installed: {{ bugfix_updates_installed | ternary('Yes', 'No') }}
+- Reboot Required: {{ reboot_required | ternary('Yes', 'No') }}
+
+System Information:
+- Kernel Version: {{ ansible_kernel }}
+- Architecture: {{ ansible_architecture }}
+- Memory: {{ ansible_memtotal_mb }} MB
+- CPU Cores: {{ ansible_processor_vcpus }}
+
+Package Statistics:
+- Total Packages Before: {{ ansible_pkg_mgr_packages | length if ansible_pkg_mgr_packages is defined else 'N/A' }}
+
+Services Status:
+{% for service in ansible_facts.services.keys() | list | sort %}
+{% if ansible_facts.services[service].state == 'running' %}
+- {{ service }}: {{ ansible_facts.services[service].state }}
+{% endif %}
+{% endfor %}
+
+Disk Usage:
+{% for mount in ansible_mounts %}
+- {{ mount.mount }}: {{ mount.size_available | filesizeformat }} available of {{ mount.size_total | filesizeformat }}
+{% endfor %}
+EOF
