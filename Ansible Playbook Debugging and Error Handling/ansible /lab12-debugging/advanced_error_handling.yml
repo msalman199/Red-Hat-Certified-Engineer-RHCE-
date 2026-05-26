@@ -1,0 +1,70 @@
+---
+- name: Advanced Error Handling Scenarios
+  hosts: localhost
+  vars:
+    retry_count: 3
+    
+  tasks:
+    - name: File operations with error handling
+      block:
+        - name: Attempt to read a non-existent file
+          slurp:
+            src: /tmp/nonexistent_file.txt
+          register: file_content
+        
+        - name: Process file content
+          debug:
+            msg: "File content: {{ file_content.content | b64decode }}"
+      
+      rescue:
+        - name: Handle file not found error
+          debug:
+            msg: "File not found, creating default file"
+        
+        - name: Create the missing file
+          copy:
+            content: "Default configuration content"
+            dest: /tmp/nonexistent_file.txt
+        
+        - name: Retry reading the file
+          slurp:
+            src: /tmp/nonexistent_file.txt
+          register: file_content_retry
+        
+        - name: Display recovered content
+          debug:
+            msg: "Recovered content: {{ file_content_retry.content | b64decode }}"
+      
+      always:
+        - name: Cleanup temporary files
+          file:
+            path: /tmp/nonexistent_file.txt
+            state: absent
+    
+    - name: Service management with error handling
+      block:
+        - name: Attempt to start a non-existent service
+          systemd:
+            name: fake-service
+            state: started
+          become: yes
+      
+      rescue:
+        - name: Handle service error
+          debug:
+            msg: "Service operation failed, implementing fallback"
+        
+        - name: Check available services
+          command: systemctl list-units --type=service --state=active
+          register: active_services
+          become: yes
+        
+        - name: Display service count
+          debug:
+            msg: "Found {{ active_services.stdout_lines | length }} active services"
+      
+      always:
+        - name: Log service operation attempt
+          debug:
+            msg: "Service operation completed with error handling"
+            EOF
