@@ -1,0 +1,33 @@
+---
+- name: Install and Configure Essential Packages
+  hosts: all
+  become: yes
+  gather_facts: yes
+  
+  vars:
+    common_packages:
+      - vim
+      - curl
+      - wget
+      - git
+      - htop
+    
+  tasks:
+    - name: Update package cache (DNF/YUM)
+      dnf:
+        update_cache: yes
+      when: ansible_os_family == "RedHat"
+    
+    - name: Install common packages
+      dnf:
+        name: "{{ common_packages }}"
+        state: present
+      when: ansible_os_family == "RedHat"
+    
+    - name: Verify package installation
+      command: rpm -q {{ item }}
+      loop: "{{ common_packages }}"
+      register: package_check
+      failed_when: package_check.rc != 0
+      changed_when: false
+EOF
