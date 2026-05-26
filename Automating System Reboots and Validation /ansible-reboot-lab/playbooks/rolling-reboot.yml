@@ -1,0 +1,65 @@
+---
+- name: Rolling System Reboot with Load Balancer Integration
+  hosts: web_servers
+  become: yes
+  gather_facts: yes
+  serial: 1
+  
+  vars:
+    load_balancer_api: "http://lb.company.com/api"
+    health_check_url: "http://{{ ansible_default_ipv4.address }}/health"
+    reboot_timeout: 300
+    
+  pre_tasks:
+    - name: Remove server from load balancer
+      uri:
+        url: "{{ load_balancer_api }}/servers/{{ inventory_hostname }}/disable"
+        method: POST
+        status_code: 200
+      delegate_to: localhost
+      ignore_errors: yes
+      
+    - name: Wait for connections to drain
+      wait_for:
+        timeout: 30
+      delegate_to: localhost
+      
+    - name: Verify no active connections
+      shell: netstat -an | grep :80 | grep ESTABLISHED | wc -l
+      register: active_connections
+      
+    - name: Display connection count
+      debug:
+        msg: "Active connections before reboot: {{ active_connections.stdout }}"
+  
+  tasks:
+    - name: Perform graceful reboot
+      reboot:
+        reboot_timeout: "{{ reboot_timeout }}"
+        pre_reboot_delay: 10
+        post_reboot_delay: 30
+        test_command: "curl -f {{ health_check_url }}"
+      register: reboot_result
+      
+  post_tasks:
+    - name: Verify application health
+      uri:
+        url: "{{ health_check_url }}"
+        method: GET
+        status_code: 200
+      register: health_check
+      retries: 5
+      delay: 10
+      
+    - name: Re-enable server in load balancer
+      uri:
+        url: "{{ load_balancer_api }}/servers/{{ inventory_hostname }}/enable"
+        method: POST
+        status_code: 200
+      delegate_to: localhost
+      when: health_check is succeeded
+      
+    - name: Wait before proceeding to next server
+      wait_for:
+        timeout: 60
+      delegate_to: localhost
