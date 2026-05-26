@@ -1,0 +1,59 @@
+---
+- name: Detailed Service Validation After Reboot
+  hosts: managed_nodes
+  become: yes
+  gather_facts: yes
+  
+  vars:
+    service_checks:
+      sshd:
+        port: 22
+        process_name: sshd
+        config_file: /etc/ssh/sshd_config
+      NetworkManager:
+        process_name: NetworkManager
+        config_file: /etc/NetworkManager/NetworkManager.conf
+      chronyd:
+        port: 123
+        process_name: chronyd
+        config_file: /etc/chrony.conf
+  
+  tasks:
+    - name: Validate service processes are running
+      command: pgrep -f "{{ item.value.process_name }}"
+      register: process_check
+      loop: "{{ service_checks | dict2items }}"
+      failed_when: process_check.rc != 0
+      
+    - name: Check service listening ports
+      wait_for:
+        port: "{{ item.value.port }}"
+        host: "{{ ansible_default_ipv4.address }}"
+        timeout: 10
+      loop: "{{ service_checks | dict2items }}"
+      when: item.value.port is defined
+      
+    - name: Verify service configuration files exist
+      stat:
+        path: "{{ item.value.config_file }}"
+      register: config_check
+      loop: "{{ service_checks | dict2items }}"
+      when: item.value.config_file is defined
+      
+    - name: Display configuration file status
+      debug:
+        msg: "Config file {{ item.item.value.config_file }} for {{ item.item.key }}: {{ 'EXISTS' if item.stat.exists else 'MISSING' }}"
+      loop: "{{ config_check.results }}"
+      when: item.item.value.config_file is defined
+      
+    - name: Test network connectivity
+      uri:
+        url: "http://www.google.com"
+        method: HEAD
+        timeout: 10
+      register: connectivity_test
+      ignore_errors: yes
+      
+    - name: Display connectivity test result
+      debug:
+        msg: "Internet connectivity: {{ 'AVAILABLE' if connectivity_test.status == 200 else 'UNAVAILABLE' }}"
