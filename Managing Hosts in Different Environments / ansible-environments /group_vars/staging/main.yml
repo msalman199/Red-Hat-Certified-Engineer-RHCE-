@@ -1,0 +1,29 @@
+---
+# Staging Environment Variables
+environment_name: "staging"
+app_version: "v1.2.0"
+database_name: "myapp_staging"
+database_user: "staging_user"
+database_password: "staging_secure_password"
+log_level: "info"
+backup_enabled: true
+monitoring_enabled: true
+
+# Application Configuration
+app_config:
+  max_connections: 50
+  timeout: 60
+  cache_enabled: true
+  
+# Security Settings
+firewall_rules:
+  - port: 22
+    protocol: tcp
+    source: "10.0.0.0/8"
+  - port: 8080
+    protocol: tcp
+    source: "10.0.0.0/8"
+  - port: 443
+    protocol: tcp
+    source: "0.0.0.0/0"
+EOF
