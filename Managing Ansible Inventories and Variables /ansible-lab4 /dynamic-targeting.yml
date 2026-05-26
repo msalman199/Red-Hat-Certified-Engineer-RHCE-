@@ -1,0 +1,40 @@
+---
+- name: Dynamic Group Targeting Based on Facts
+  hosts: all
+  gather_facts: yes
+  tasks:
+    - name: Create dynamic groups based on OS
+      group_by:
+        key: "os_{{ ansible_distribution | lower }}"
+
+    - name: Create groups based on environment
+      group_by:
+        key: "env_{{ environment | default('unknown') }}"
+
+    - name: Create groups based on memory size
+      group_by:
+        key: "memory_{{ 'high' if (ansible_memtotal_mb | int) > 8192 else 'low' }}"
+
+- name: Configure CentOS/RHEL systems
+  hosts: os_centos:os_redhat
+  tasks:
+    - name: Configure Red Hat family systems
+      debug:
+        msg: "Configuring {{ ansible_distribution }} system: {{ inventory_hostname }}"
+
+- name: Configure high-memory systems
+  hosts: memory_high
+  tasks:
+    - name: Optimize for high-memory systems
+      debug:
+        msg: |
+          High-memory system detected: {{ inventory_hostname }}
+          Total Memory: {{ ansible_memtotal_mb }}MB
+          Applying high-memory optimizations...
+
+- name: Configure production environment systems
+  hosts: env_production
+  tasks:
+    - name: Apply production-specific configurations
+      debug:
+        msg: "Applying production settings to {{ inventory_hostname }}"
