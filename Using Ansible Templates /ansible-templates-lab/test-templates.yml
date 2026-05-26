@@ -1,0 +1,52 @@
+---
+- name: Test Template Deployments
+  hosts: webservers
+  gather_facts: yes
+  
+  tasks:
+    - name: Test main web page
+      uri:
+        url: "http://{{ ansible_default_ipv4.address }}/"
+        method: GET
+        return_content: yes
+      register: main_page
+      delegate_to: localhost
+
+    - name: Test system information page
+      uri:
+        url: "http://{{ ansible_default_ipv4.address }}/system-info/"
+        method: GET
+        return_content: yes
+      register: system_info_page
+      delegate_to: localhost
+
+    - name: Test JSON facts endpoint
+      uri:
+        url: "http://{{ ansible_default_ipv4.address }}/system-info/facts.json"
+        method: GET
+        return_content: yes
+      register: facts_json
+      delegate_to: localhost
+
+    - name: Display test results
+      debug:
+        msg: |
+          Test Results for {{ ansible_hostname }}:
+          - Main page status: {{ main_page.status }}
+          - System info status: {{ system_info_page.status }}
+          - Facts JSON status: {{ facts_json.status }}
+          - Server header: {{ main_page.server | default('Not found') }}
+
+    - name: Verify Apache configuration files
+      stat:
+        path: "{{ item }}"
+      register: config_files
+      loop:
+        - /etc/httpd/conf/httpd.conf
+        - /etc/httpd/conf.d/{{ ansible_hostname }}.conf
+
+    - name: Display configuration file status
+      debug:
+        msg: "{{ item.item }} exists: {{ item.stat.exists }}, size: {{ item.stat.size | default(0) }} bytes"
+      loop: "{{ config_files.results }}"
+EOF
