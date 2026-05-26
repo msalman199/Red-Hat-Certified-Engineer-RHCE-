@@ -1,0 +1,77 @@
+---
+- name: Add Users to Managed Systems
+  hosts: all
+  become: yes
+  vars:
+    users_to_add:
+      - username: john_doe
+        full_name: "John Doe"
+        shell: /bin/bash
+        groups: ["users", "developers"]
+        password: "$6$salt$encrypted_password_hash"
+        expires: -1
+        create_home: yes
+      - username: jane_smith
+        full_name: "Jane Smith"
+        shell: /bin/bash
+        groups: ["users", "admins"]
+        password: "$6$salt$another_encrypted_hash"
+        expires: 1735689600  # Unix timestamp for future date
+        create_home: yes
+      - username: temp_user
+        full_name: "Temporary User"
+        shell: /bin/bash
+        groups: ["users"]
+        password: "$6$salt$temp_password_hash"
+        expires: 1672531200  # Unix timestamp for past date (expired)
+        create_home: yes
+
+  tasks:
+    - name: Ensure required groups exist
+      group:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - users
+        - developers
+        - admins
+
+    - name: Create users with specified attributes
+      user:
+        name: "{{ item.username }}"
+        comment: "{{ item.full_name }}"
+        shell: "{{ item.shell }}"
+        groups: "{{ item.groups | join(',') }}"
+        password: "{{ item.password }}"
+        expires: "{{ item.expires }}"
+        createhome: "{{ item.create_home }}"
+        state: present
+      loop: "{{ users_to_add }}"
+      register: user_creation_result
+
+    - name: Display user creation results
+      debug:
+        msg: "User {{ item.item.username }} created successfully"
+      loop: "{{ user_creation_result.results }}"
+      when: item.changed
+
+    - name: Set up SSH directory for users
+      file:
+        path: "/home/{{ item.username }}/.ssh"
+        state: directory
+        owner: "{{ item.username }}"
+        group: "{{ item.username }}"
+        mode: '0700'
+      loop: "{{ users_to_add }}"
+      when: item.create_home
+
+    - name: Create authorized_keys file for users
+      file:
+        path: "/home/{{ item.username }}/.ssh/authorized_keys"
+        state: touch
+        owner: "{{ item.username }}"
+        group: "{{ item.username }}"
+        mode: '0600'
+      loop: "{{ users_to_add }}"
+      when: item.create_home
+EOF
