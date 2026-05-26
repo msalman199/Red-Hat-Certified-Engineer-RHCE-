@@ -1,0 +1,19 @@
+---
+# Web1 specific configuration - Public facing web server
+firewall_zones:
+  - name: public
+    target: default
+    services:
+      - http
+      - https
+      - ssh
+    ports:
+      - "80/tcp"
+      - "443/tcp"
+      - "8080/tcp"
+    rich_rules:
+      - 'rule family="ipv4" source address="0.0.0.0/0" service name="http" accept'
+      - 'rule family="ipv4" source address="0.0.0.0/0" service name="https" accept'
+
+default_zone: public
+server_role: "public_web"
