@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>System Information - {{ ansible_hostname }}</title>
+    <style>
+        body { font-family: 'Courier New', monospace; margin: 20px; background: #1e1e1e; color: #00ff00; }
+        .container { background: #000; padding: 20px; border: 2px solid #00ff00; border-radius: 10px; }
+        .section { margin: 20px 0; padding: 15px; border: 1px solid #333; background: #111; }
+        .header { color: #00ffff; font-size: 1.5em; margin-bottom: 10px; }
+        .fact { margin: 5px 0; }
+        .value { color: #ffff00; }
+        table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+        th, td { border: 1px solid #333; padding: 8px; text-align: left; }
+        th { background: #333; color: #00ffff; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 style="text-align: center; color: #00ffff;">SYSTEM INFORMATION DASHBOARD</h1>
+        <p style="text-align: center;">Generated on {{ ansible_date_time.iso8601 }}</p>
+        
+        <div class="section">
+            <div class="header">Basic System Information</div>
+            <div class="fact">Hostname: <span class="value">{{ ansible_hostname }}</span></div>
+            <div class="fact">FQDN: <span class="value">{{ ansible_fqdn }}</span></div>
+            <div class="fact">Operating System: <span class="value">{{ ansible_distribution }} {{ ansible_distribution_version }}</span></div>
+            <div class="fact">Kernel: <span class="value">{{ ansible_kernel }}</span></div>
+            <div class="fact">Architecture: <span class="value">{{ ansible_architecture }}</span></div>
+            <div class="fact">Virtualization Type: <span class="value">{{ ansible_virtualization_type | default('Physical') }}</span></div>
+            <div class="fact">System Vendor: <span class="value">{{ ansible_system_vendor | default('Unknown') }}</span></div>
+        </div>
+
+        <div class="section">
+            <div class="header">Hardware Information</div>
+            <div class="fact">Processor: <span class="value">{{ ansible_processor[1] if ansible_processor|length > 1 else 'Unknown' }}</span></div>
+            <div class="fact">CPU Cores: <span class="value">{{ ansible_processor_vcpus }}</span></div>
+            <div class="fact">Total Memory: <span class="value">{{ ansible_memtotal_mb }}MB ({{ (ansible_memtotal_mb/1024)|round(2) }}GB)</span></div>
+            <div class="fact">Free Memory: <span class="value">{{ ansible_memfree_mb }}MB</span></div>
+            <div class="fact">Swap Total: <span class="value">{{ ansible_swaptotal_mb }}MB</span></div>
+        </div>
+
+        <div class="section">
+            <div class="header">Network Configuration</div>
+            <div class="fact">Primary IP: <span class="value">{{ ansible_default_ipv4.address }}</span></div>
+            <div class="fact">Primary Interface: <span class="value">{{ ansible_default_ipv4.interface }}</span></div>
+            <div class="fact">Gateway: <span class="value">{{ ansible_default_ipv4.gateway }}</span></div>
+            <div class="fact">DNS Servers: <span class="value">{{ ansible_dns.nameservers | join(', ') if ansible_dns.nameservers is defined else 'Not configured' }}</span></div>
+            
+            <h4 style="color: #00ffff;">All Network Interfaces:</h4>
+            <table>
+                <tr><th>Interface</th><th>IP Address</th><th>MAC Address</th><th>Status</th></tr>
+                {% for interface in ansible_interfaces %}
+                {% if interface != 'lo' %}
+                <tr>
+                    <td>{{ interface }}</td>
+                    <td>{{ hostvars[inventory_hostname]['ansible_' + interface]['ipv4']['address'] | default('N/A') }}</td>
+                    <td>{{ hostvars[inventory_hostname]['ansible_' + interface]['macaddress'] | default('N/A') }}</td>
+                    <td>{{ hostvars[inventory_hostname]['ansible_' + interface]['active'] | default('Unknown') }}</td>
+                </tr>
+                {% endif %}
+                {% endfor %}
+            </table>
+        </div>
+
+        <div class="section">
+            <div class="header">Storage Information</div>
+            <table>
+                <tr><th>Mount Point</th><th>Device</th><th>Filesystem</th><th>Size</th><th>Available</th><th>Usage %</th></tr>
+                {% for mount in ansible_mounts %}
+                <tr>
+                    <td>{{ mount.mount }}</td>
+                    <td>{{ mount.device }}</td>
+                    <td>{{ mount.fstype }}</td>
+                    <td>{{ (mount.size_total/1024/1024/1024)|round(2) }}GB</td>
+                    <td>{{ (mount.size_available/1024/1024/1024)|round(2) }}GB</td>
+                    <td>{{ (((mount.size_total - mount.size_available)/mount.size_total)*100)|round(1) }}%</td>
+                </tr>
+                {% endfor %}
+            </table>
+        </div>
+
+        <div class="section">
+            <div class="header">Environment Variables</div>
+            {% for key, value in ansible_env.items() %}
+            <div class="fact">{{ key }}: <span class="value">{{ value }}</span></div>
+            {% endfor %}
+        </div>
+
+        <div class="section">
+            <div class="header">Installed Packages (Sample)</div>
+            {% if ansible_facts.packages is defined %}
+            <div class="fact">Total Packages: <span class="value">{{ ansible_facts.packages.keys() | length }}</span></div>
+            <div class="fact">Sample packages:</div>
+            {% for package in ansible_facts.packages.keys() | list | sort %}
+            {% if loop.index <= 10 %}
+            <div class="fact">  - {{ package }}: <span class="value">{{ ansible_facts.packages[package][0].version }}</span></div>
+            {% endif %}
+            {% endfor %}
+            {% else %}
+            <div class="fact">Package information not available</div>
+            {% endif %}
+        </div>
+
+        <div class="section">
+            <div class="header">System Load and Uptime</div>
+            <div class="fact">Uptime: <span class="value">{{ ansible_uptime_seconds }} seconds</span></div>
+            <div class="fact">Load Average: <span class="value">{{ ansible_loadavg }}</span></div>
+        </div>
+
+        <div class="section">
+            <div class="header">Application Configuration</div>
+            <div class="fact">App Name: <span class="value">{{ app_name }}</span></div>
+            <div class="fact">App Version: <span class="value">{{ app_version }}</span></div>
+            <div class="fact">Environment: <span class="value">{{ app_environment }}</span></div>
+            <div class="fact">Apache Max Clients: <span class="value">{{ apache_max_clients }}</span></div>
+            {% if custom_modules is defined %}
+            <div class="fact">Custom Modules: <span class="value">{{ custom_modules | join(', ') }}</span></div>
+            {% endif %}
+        </div>
+    </div>
+</body>
+</html>
+EOF
