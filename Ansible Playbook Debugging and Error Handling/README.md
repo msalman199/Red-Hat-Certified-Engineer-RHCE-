@@ -14,9 +14,6 @@
 ![Error Handling](https://img.shields.io/badge/Error_Handling-D32F2F?style=for-the-badge&logo=sentry&logoColor=white)
 ![Linux](https://img.shields.io/badge/Linux-FCC624?style=for-the-badge&logo=linux&logoColor=black)
 ![Ansible](https://img.shields.io/badge/Ansible-EE0000?style=for-the-badge&logo=ansible&logoColor=white)
-![Automation](https://img.shields.io/badge/Automation-00C853?style=for-the-badge&logo=githubactions&logoColor=white)
-![Debugging](https://img.shields.io/badge/Debugging-FF9800?style=for-the-badge&logo=bugatti&logoColor=white)
-![Playbook](https://img.shields.io/badge/Playbook-1A1918?style=for-the-badge&logo=ansible&logoColor=white)
 ## 📌 Objectives
 
 By the end of this lab, you will be able to:
