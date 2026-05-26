@@ -1,0 +1,31 @@
+---
+- name: Conditional Fail Examples
+  hosts: localhost
+  vars:
+    app_version: "1.2.3"
+    min_version: "1.3.0"
+    user_role: "admin"
+    
+  tasks:
+    - name: Version check with custom failure
+      block:
+        - name: Compare versions
+          set_fact:
+            version_check: "{{ app_version is version(min_version, '>=') }}"
+        
+        - name: Fail if version is too old
+          fail:
+            msg: |
+              Application version {{ app_version }} is below minimum required version {{ min_version }}.
+              Please upgrade before continuing.
+          when: not version_check
+      
+    - name: Role-based access control
+      fail:
+        msg: "Access denied. Only admin users can perform this operation."
+      when: user_role != "admin"
+    
+    - name: Success message
+      debug:
+        msg: "All validation checks passed successfully!"
+EOF
