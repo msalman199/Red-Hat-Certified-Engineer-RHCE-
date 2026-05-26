@@ -1,0 +1,67 @@
+---
+# tasks file for webserver
+- name: Install web server package
+  package:
+    name: "{{ webserver_package }}"
+    state: present
+  become: yes
+
+- name: Install additional packages
+  package:
+    name:
+      - firewalld
+      - curl
+    state: present
+  become: yes
+
+- name: Create web server user
+  user:
+    name: "{{ webserver_user }}"
+    group: "{{ webserver_group }}"
+    system: yes
+    shell: /sbin/nologin
+    home: "{{ webserver_document_root }}"
+    create_home: no
+  become: yes
+
+- name: Create document root directory
+  file:
+    path: "{{ webserver_document_root }}"
+    state: directory
+    owner: "{{ webserver_user }}"
+    group: "{{ webserver_group }}"
+    mode: '0755'
+  become: yes
+
+- name: Create a simple index.html
+  template:
+    src: index.html.j2
+    dest: "{{ webserver_document_root }}/{{ webserver_index_file }}"
+    owner: "{{ webserver_user }}"
+    group: "{{ webserver_group }}"
+    mode: '0644'
+  become: yes
+  notify: restart webserver
+
+- name: Start and enable firewall service
+  systemd:
+    name: "{{ firewall_service }}"
+    state: started
+    enabled: yes
+  become: yes
+
+- name: Open firewall port for web server
+  firewalld:
+    port: "{{ webserver_port }}/tcp"
+    permanent: yes
+    state: enabled
+    immediate: yes
+  become: yes
+
+- name: Start and enable web server service
+  systemd:
+    name: "{{ webserver_service }}"
+    state: started
+    enabled: yes
+  become: yes
+  notify: restart webserver
