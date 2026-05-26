@@ -1,0 +1,69 @@
+---
+- name: SELinux Policy Module Management
+  hosts: managed_nodes
+  become: yes
+  
+  tasks:
+    - name: List currently loaded SELinux modules
+      command: semodule -l
+      register: loaded_modules
+      changed_when: false
+    
+    - name: Count loaded modules
+      debug:
+        msg: "Total loaded SELinux modules: {{ loaded_modules.stdout_lines | length }}"
+    
+    - name: Check for custom policy modules
+      shell: semodule -l | grep -v "^[a-z]*\s*[0-9]" || echo "No custom modules found"
+      register: custom_modules
+      changed_when: false
+    
+    - name: Display custom modules
+      debug:
+        var: custom_modules.stdout_lines
+    
+    - name: Create a simple custom policy module
+      copy:
+        content: |
+          module myapp 1.0;
+          
+          require {
+              type httpd_t;
+              type httpd_exec_t;
+              class file { read execute };
+          }
+          
+          # Allow httpd to read and execute files in custom location
+          allow httpd_t httpd_exec_t:file { read execute };
+        dest: /tmp/myapp.te
+    
+    - name: Compile custom policy module
+      shell: |
+        cd /tmp
+        checkmodule -M -m -o myapp.mod myapp.te
+        semodule_package -o myapp.pp -m myapp.mod
+      register: module_compile
+      changed_when: true
+    
+    - name: Install custom policy module
+      command: semodule -i /tmp/myapp.pp
+      register: module_install
+      changed_when: true
+    
+    - name: Verify module installation
+      shell: semodule -l | grep myapp
+      register: module_verify
+      changed_when: false
+    
+    - name: Display module verification
+      debug:
+        msg: "Custom module status: {{ module_verify.stdout if module_verify.stdout else 'Module not found' }}"
+    
+    - name: Clean up temporary files
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /tmp/myapp.te
+        - /tmp/myapp.mod
+        - /tmp/myapp.pp
