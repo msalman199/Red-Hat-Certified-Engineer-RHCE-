@@ -1,0 +1,30 @@
+---
+- name: Check service {{ service.name }}
+  block:
+    - name: Debug service information
+      debug:
+        msg: "Checking {{ service.name }} on port {{ service.port }} (Critical: {{ service.critical }})"
+      when: debug_enabled
+    
+    - name: Simulate service check
+      set_fact:
+        service_status: "{{ 'running' if service.port != 3306 else 'stopped' }}"
+    
+    - name: Fail for critical services that are down
+      fail:
+        msg: "Critical service {{ service.name }} is not running"
+      when: 
+        - service.critical
+        - service_status != 'running'
+
+rescue:
+  - name: Handle service failure
+    debug:
+      msg: "Service {{ service.name }} failed check, implementing recovery"
+    when: service.critical
+  
+  - name: Skip non-critical service failures
+    debug:
+      msg: "Non-critical service {{ service.name }} failure ignored"
+    when: not service.critical
+EOF
