@@ -1,0 +1,34 @@
+---
+- name: Fail Module Implementation
+  hosts: localhost
+  gather_facts: yes
+  vars:
+    required_memory_gb: 4
+    max_cpu_usage: 80
+    
+  tasks:
+    - name: Check if system has enough memory
+      fail:
+        msg: "System has insufficient memory. Required: {{ required_memory_gb }}GB"
+      when: (ansible_memtotal_mb / 1024) < required_memory_gb
+    
+    - name: Validate environment variable
+      fail:
+        msg: "ENVIRONMENT variable must be set to 'production' or 'development'"
+      when: 
+        - ansible_env.ENVIRONMENT is defined
+        - ansible_env.ENVIRONMENT not in ['production', 'development']
+    
+    - name: Check for required packages (simulation)
+      set_fact:
+        package_installed: false
+    
+    - name: Fail if required package is missing
+      fail:
+        msg: "Critical package is not installed. Please install before proceeding."
+      when: not package_installed
+    
+    - name: This task won't execute due to previous failure
+      debug:
+        msg: "This message should not appear"
+EOF
