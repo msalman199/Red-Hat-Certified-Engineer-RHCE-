@@ -1,0 +1,61 @@
+# Application Configuration for {{ environment_name }}
+app:
+  name: {{ app_name | default('myapp') }}
+  version: {{ app_version }}
+  environment: {{ environment_name }}
+  port: {{ app_port | default(8080) }}
+  debug: {{ debug_mode | default(false) }}
+  log_level: {{ log_level | default('info') }}
+
+database:
+  name: {{ database_name }}
+  user: {{ database_user }}
+  password: {{ database_password }}
+  host: localhost
+  port: 3306
+
+{% if app_config is defined %}
+performance:
+  max_connections: {{ app_config.max_connections }}
+  timeout: {{ app_config.timeout }}
+  cache_enabled: {{ app_config.cache_enabled }}
+{% endif %}
+
+{% if ssl_config is defined and ssl_enabled | default(false) %}
+ssl:
+  enabled: true
+  cert_path: {{ ssl_config.cert_path }}
+  key_path: {{ ssl_config.key_path }}
+{% endif %}
+EOF
+
+# Create nginx configuration template
+cat > templates/nginx_app.j2 << 'EOF'
+server {
+    listen {{ app_port | default(80) }};
+    server_name {{ ansible_hostname }};
+    
+    # Environment: {{ environment_name }}
+    
+    location / {
+        proxy_pass http://127.0.0.1:{{ app_port | default(8080) }};
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+    
+    {% if environment_name == 'production' and ssl_enabled | default(false) %}
+    # SSL Configuration for Production
+    listen 443 ssl;
+    ssl_certificate {{ ssl_config.cert_path }};
+    ssl_certificate_key {{ ssl_config.key_path }};
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+    {% endif %}
+    
+    # Logging
+    access_log /var/log/nginx/{{ app_name | default('myapp') }}_access.log;
+    error_log /var/log/nginx/{{ app_name | default('myapp') }}_error.log {{ log_level | default('warn') }};
+}
+EOF
