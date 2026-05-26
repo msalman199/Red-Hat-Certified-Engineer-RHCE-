@@ -1,0 +1,31 @@
+---
+- name: Check Mode Aware Playbook
+  hosts: localhost
+  
+  tasks:
+    - name: Display mode information
+      debug:
+        msg: "Running in {{ 'CHECK' if ansible_check_mode else 'NORMAL' }} mode"
+    
+    - name: Task that behaves differently in check mode
+      debug:
+        msg: "This would create a backup file"
+      when: ansible_check_mode
+    
+    - name: Actual file creation (skipped in check mode)
+      copy:
+        content: "Production data"
+        dest: /tmp/production_file.txt
+      when: not ansible_check_mode
+    
+    - name: Always run this task regardless of mode
+      debug:
+        msg: "This task always runs"
+      check_mode: no
+    
+    - name: Never run this task in check mode
+      debug:
+        msg: "This only runs in normal mode"
+      check_mode: no
+      when: not ansible_check_mode
+EOF
