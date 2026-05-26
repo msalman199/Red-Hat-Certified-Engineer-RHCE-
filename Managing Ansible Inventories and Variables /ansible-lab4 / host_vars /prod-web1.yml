@@ -1,0 +1,26 @@
+---
+# Host-specific variables for prod-web1
+server_role: primary_web
+cpu_cores: 8
+memory_gb: 16
+disk_space_gb: 200
+
+# Application-specific settings
+app_version: "2.0.5"
+ssl_enabled: true
+monitoring_enabled: true
+
+# Custom configuration
+custom_config:
+  cache_size: "512M"
+  session_timeout: 3600
+  upload_max_size: "50M"
+
+# Security settings
+firewall_rules:
+  - port: 80
+    protocol: tcp
+    source: "0.0.0.0/0"
+  - port: 443
+    protocol: tcp
+    source: "0.0.0.0/0"
