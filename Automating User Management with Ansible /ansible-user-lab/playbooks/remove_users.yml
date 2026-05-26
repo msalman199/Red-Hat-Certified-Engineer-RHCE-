@@ -1,0 +1,52 @@
+---
+- name: Remove Users from Managed Systems
+  hosts: all
+  become: yes
+  vars:
+    users_to_remove:
+      - username: temp_user
+        remove_home: yes
+        force_remove: yes
+      - username: old_employee
+        remove_home: no
+        force_remove: no
+
+  tasks:
+    - name: Check if users exist before removal
+      getent:
+        database: passwd
+        key: "{{ item.username }}"
+      loop: "{{ users_to_remove }}"
+      register: user_check
+      failed_when: false
+
+    - name: Display users found for removal
+      debug:
+        msg: "User {{ item.item.username }} exists and will be removed"
+      loop: "{{ user_check.results }}"
+      when: item.ansible_facts is defined
+
+    - name: Backup user home directories before removal
+      archive:
+        path: "/home/{{ item.username }}"
+        dest: "/tmp/{{ item.username }}_backup_{{ ansible_date_time.epoch }}.tar.gz"
+        format: gz
+      loop: "{{ users_to_remove }}"
+      when: 
+        - item.remove_home
+        - user_check.results | selectattr('item.username', 'equalto', item.username) | selectattr('ansible_facts', 'defined') | list | length > 0
+
+    - name: Remove users from system
+      user:
+        name: "{{ item.username }}"
+        state: absent
+        remove: "{{ item.remove_home }}"
+        force: "{{ item.force_remove }}"
+      loop: "{{ users_to_remove }}"
+      register: user_removal_result
+
+    - name: Display removal results
+      debug:
+        msg: "User {{ item.item.username }} removal status: {{ 'Success' if item.changed else 'User not found or already removed' }}"
+      loop: "{{ user_removal_result.results }}"
+EOF
