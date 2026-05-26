@@ -1,0 +1,43 @@
+---
+- name: Validate Firewall Configuration
+  hosts: webservers
+  become: yes
+  vars:
+    validation_tests:
+      - name: "Check firewalld service status"
+        command: "systemctl is-active firewalld"
+        expected: "active"
+      - name: "Check default zone"
+        command: "firewall-cmd --get-default-zone"
+        expected: "public"
+      - name: "List active services"
+        command: "firewall-cmd --list-services"
+        expected_contains: ["http", "https", "ssh"]
+
+  tasks:
+    - name: Run validation tests
+      command: "{{ item.command }}"
+      register: test_results
+      loop: "{{ validation_tests }}"
+      changed_when: false
+      failed_when: false
+
+    - name: Analyze test results
+      set_fact:
+        validation_summary: "{{ validation_summary | default([]) + [{'test': item.item.name, 'result': item.stdout, 'status': 'PASS' if item.rc == 0 else 'FAIL'}] }}"
+      loop: "{{ test_results.results }}"
+
+    - name: Display validation summary
+      debug:
+        var: validation_summary
+
+    - name: Generate validation report
+      template:
+        src: validation_report.j2
+        dest: "/tmp/firewall-validation-{{ ansible_date_time.date }}.html"
+      notify: display report location
+
+  handlers:
+    - name: display report location
+      debug:
+        msg: "Validation report generated at /tmp/firewall-validation-{{ ansible_date_time.date }}.html"
