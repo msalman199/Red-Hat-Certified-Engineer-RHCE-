@@ -1,0 +1,86 @@
+---
+- name: Complete Web Stack Deployment
+  hosts: webservers
+  become: yes
+  
+  vars:
+    deployment_environment: production
+    monitoring_enabled: true
+
+  pre_tasks:
+    - name: Update system packages
+      package:
+        name: '*'
+        state: latest
+      when: ansible_os_family == "RedHat"
+
+    - name: Display deployment information
+      debug:
+        msg: |
+          Starting deployment on {{ ansible_hostname }}
+          Environment: {{ deployment_environment }}
+          IP Address: {{ ansible_default_ipv4.address }}
+          OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
+
+  roles:
+    # Security and firewall first
+    - geerlingguy.security
+    - geerlingguy.firewall
+    
+    # Our custom roles
+    - database
+    - webserver
+    - webapp
+    
+    # Community nginx role for load balancing
+    - role: geerlingguy.nginx
+      vars:
+        nginx_vhosts:
+          - listen: "80"
+            server_name: "{{ ansible_default_ipv4.address }}"
+            root: "/var/www/html"
+            index: "index.html"
+            extra_parameters: |
+              location /app/ {
+                  proxy_pass http://localhost:8080/webapp/;
+                  proxy_set_header Host $host;
+                  proxy_set_header X-Real-IP $remote_addr;
+              }
+
+  post_tasks:
+    - name: Verify all services are running
+      systemd:
+        name: "{{ item }}"
+        state: started
+      loop:
+        - httpd
+        - mariadb
+        - nginx
+        - firewalld
+
+    - name: Test all endpoints
+      uri:
+        url: "{{ item }}"
+        method: GET
+        status_code: 200
+      loop:
+        - "http://{{ ansible_default_ipv4.address }}"
+        - "http://{{ ansible_default_ipv4.address }}/app/"
+      delegate_to: localhost
+
+    - name: Display final deployment status
+      debug:
+        msg: |
+          🎉 DEPLOYMENT COMPLETED SUCCESSFULLY! 🎉
+          
+          Services Available:
+          - Main Website: http://{{ ansible_default_ipv4.address }}
+          - Web Application: http://{{ ansible_default_ipv4.address }}/app/
+          - Database: {{ ansible_default_ipv4.address }}:3306
+          
+          Security Features:
+          - Firewall configured and active
+          - Security hardening applied
+          - Fail2ban protection enabled
+          
+          All services are running and accessible!
