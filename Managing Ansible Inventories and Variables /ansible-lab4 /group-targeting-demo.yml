@@ -1,0 +1,99 @@
+---
+- name: Configure Web Servers
+  hosts: webservers
+  become: yes
+  tasks:
+    - name: Display web server configuration
+      debug:
+        msg: |
+          Configuring {{ service_name }} on {{ inventory_hostname }}
+          Document Root: {{ document_root }}
+          Environment: {{ environment_type | default('development') }}
+          Max Workers: {{ performance_settings.max_request_workers }}
+
+    - name: Install web server packages
+      yum:
+        name: "{{ required_packages }}"
+        state: present
+      when: ansible_os_family == "RedHat"
+
+    - name: Create document root directory
+      file:
+        path: "{{ document_root }}"
+        state: directory
+        owner: apache
+        group: apache
+        mode: '0755'
+
+    - name: Configure backup directory
+      file:
+        path: "{{ backup_schedule.backup_path }}"
+        state: directory
+        mode: '0750'
+
+- name: Configure Database Servers
+  hosts: databases
+  become: yes
+  tasks:
+    - name: Display database configuration
+      debug:
+        msg: |
+          Configuring {{ service_name }} on {{ inventory_hostname }}
+          Data Directory: {{ data_directory }}
+          Port: {{ mysql_config.port }}
+          Max Connections: {{ mysql_config.max_connections }}
+
+    - name: Install database packages
+      yum:
+        name: "{{ required_packages }}"
+        state: present
+      when: ansible_os_family == "RedHat"
+
+    - name: Create data directory
+      file:
+        path: "{{ data_directory }}"
+        state: directory
+        owner: mysql
+        group: mysql
+        mode: '0750'
+
+    - name: Configure backup directory
+      file:
+        path: "{{ backup_schedule.backup_path }}"
+        state: directory
+        mode: '0750'
+
+- name: Apply Production-Wide Settings
+  hosts: production
+  become: yes
+  tasks:
+    - name: Display production environment info
+      debug:
+        msg: |
+          Production server: {{ inventory_hostname }}
+          Environment: {{ environment_type }}
+          Monitoring: {{ monitoring_enabled }}
+          Timezone: {{ timezone }}
+
+    - name: Set timezone
+      timezone:
+        name: "{{ timezone }}"
+
+    - name: Configure NTP
+      template:
+        src: ntp.conf.j2
+        dest: /etc/ntp.conf
+        backup: yes
+      notify: restart ntp
+
+    - name: Install monitoring agent
+      yum:
+        name: node_exporter
+        state: present
+      when: monitoring_enabled | bool
+
+  handlers:
+    - name: restart ntp
+      service:
+        name: ntpd
+        state: restarted
