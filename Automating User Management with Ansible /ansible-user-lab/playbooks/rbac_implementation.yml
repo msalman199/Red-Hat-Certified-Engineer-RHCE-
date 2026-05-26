@@ -1,0 +1,96 @@
+---
+- name: Implement Role-Based Access Control
+  hosts: all
+  become: yes
+  vars:
+    rbac_roles:
+      - role_name: web_developers
+        permissions:
+          - "/var/www"
+          - "/var/log/httpd"
+        sudo_commands:
+          - "/bin/systemctl restart httpd"
+          - "/bin/systemctl reload httpd"
+        members: ["john_doe", "alice_dev"]
+      
+      - role_name: database_operators
+        permissions:
+          - "/var/lib/mysql"
+          - "/var/log/mysql"
+        sudo_commands:
+          - "/bin/systemctl restart mysqld"
+          - "/usr/bin/mysql"
+        members: ["db_admin", "jane_smith"]
+      
+      - role_name: system_monitors
+        permissions:
+          - "/var/log"
+          - "/proc"
+          - "/sys"
+        sudo_commands:
+          - "/bin/systemctl status *"
+          - "/usr/bin/top"
+          - "/usr/bin/htop"
+        members: ["admin_user", "jane_smith"]
+
+  tasks:
+    - name: Create RBAC groups
+      group:
+        name: "{{ item.role_name }}"
+        state: present
+      loop: "{{ rbac_roles }}"
+
+    - name: Add users to RBAC groups
+      user:
+        name: "{{ item.1 }}"
+        groups: "{{ item.0.role_name }}"
+        append: yes
+      with_subelements:
+        - "{{ rbac_roles }}"
+        - members
+      ignore_errors: yes
+
+    - name: Create permission directories
+      file:
+        path: "{{ item.1 }}"
+        state: directory
+        owner: root
+        group: "{{ item.0.role_name }}"
+        mode: '2755'
+      with_subelements:
+        - "{{ rbac_roles }}"
+        - permissions
+      ignore_errors: yes
+
+    - name: Configure sudo rules for RBAC roles
+      template:
+        src: rbac_sudo.j2
+        dest: "/etc/sudoers.d/{{ item.role_name }}"
+        mode: '0440'
+        validate: 'visudo -cf %s'
+      loop: "{{ rbac_roles }}"
+
+    - name: Create RBAC sudo template
+      copy:
+        content: |
+          # Sudo rules for {{ item.role_name }}
+          %{{ item.role_name }} ALL=(ALL) NOPASSWD: {{ item.sudo_commands | join(', ') }}
+        dest: "/etc/sudoers.d/{{ item.role_name }}"
+        mode: '0440'
+        validate: 'visudo -cf %s'
+      loop: "{{ rbac_roles }}"
+
+    - name: Verify RBAC implementation
+      shell: |
+        echo "=== {{ item.role_name }} Members ==="
+        getent group {{ item.role_name }}
+        echo "=== Sudo Rules ==="
+        cat /etc/sudoers.d/{{ item.role_name }}
+      loop: "{{ rbac_roles }}"
+      register: rbac_verification
+
+    - name: Display RBAC verification results
+      debug:
+        msg: "{{ item.stdout_lines }}"
+      loop: "{{ rbac_verification.results }}"
+EOF
