@@ -1,0 +1,31 @@
+---
+- name: Variable Precedence Demonstration
+  hosts: all
+  vars:
+    # Playbook variables (lower precedence)
+    test_variable: "playbook_value"
+    common_setting: "from_playbook"
+    
+  tasks:
+    - name: Show variable precedence
+      debug:
+        msg: |
+          === Variable Precedence Test ===
+          Host: {{ inventory_hostname }}
+          Test Variable: {{ test_variable }}
+          Common Setting: {{ common_setting }}
+          Environment: {{ environment | default('not_defined') }}
+          
+          === Variable Sources ===
+          Group vars take precedence over playbook vars
+          Host vars take precedence over group vars
+          Extra vars (-e) take precedence over all others
+
+    - name: Display all variables for this host
+      debug:
+        var: hostvars[inventory_hostname]
+      when: inventory_hostname == "dev-web1" or inventory_hostname == "prod-web1"
+
+    - name: Show group membership
+      debug:
+        msg: "{{ inventory_hostname }} belongs to groups: {{ group_names }}"
