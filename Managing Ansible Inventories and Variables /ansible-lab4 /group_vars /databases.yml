@@ -1,0 +1,33 @@
+---
+# Group variables for databases
+service_name: "mysqld"
+data_directory: "/var/lib/mysql"
+log_directory: "/var/log/mysql"
+config_file: "/etc/my.cnf"
+
+# Database packages
+required_packages:
+  - mysql-server
+  - mysql-client
+  - python3-PyMySQL
+
+# Database configuration
+mysql_config:
+  bind_address: "0.0.0.0"
+  port: 3306
+  max_connections: 200
+  innodb_buffer_pool_size: "1G"
+  query_cache_size: "64M"
+
+# Security settings
+security_config:
+  remove_anonymous_users: true
+  remove_test_database: true
+  disallow_root_login_remotely: true
+
+# Backup configuration
+backup_schedule:
+  frequency: "daily"
+  retention_days: 30
+  backup_path: "/backup/mysql"
+  compress: true
