@@ -1,0 +1,38 @@
+---
+- name: System Configuration Changes
+  hosts: node1
+  become: yes
+  
+  tasks:
+    - name: Install a package
+      yum:
+        name: htop
+        state: present
+    
+    - name: Create a configuration file
+      copy:
+        content: |
+          # Application Configuration
+          debug_mode=true
+          log_level=info
+          max_connections=100
+        dest: /etc/myapp.conf
+        mode: '0644'
+    
+    - name: Create a system user
+      user:
+        name: appuser
+        system: yes
+        shell: /bin/bash
+        home: /opt/appuser
+    
+    - name: Start and enable a service
+      systemd:
+        name: chronyd
+        state: started
+        enabled: yes
+    
+    - name: Display completion message
+      debug:
+        msg: "System configuration completed successfully"
+EOF
