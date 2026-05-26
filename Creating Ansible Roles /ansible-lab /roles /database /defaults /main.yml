@@ -1,0 +1,9 @@
+---
+# defaults file for database
+db_package: mariadb-server
+db_service: mariadb
+db_port: 3306
+db_root_password: SecurePassword123!
+db_user: webapp
+db_password: WebAppPassword123!
+db_name: webapp_db
