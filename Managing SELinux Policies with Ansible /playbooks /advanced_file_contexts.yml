@@ -1,0 +1,66 @@
+---
+- name: Advanced SELinux File Context Management
+  hosts: managed_nodes
+  become: yes
+  
+  tasks:
+    - name: Backup current SELinux file contexts
+      shell: semanage fcontext -l > /tmp/selinux_contexts_backup_{{ ansible_date_time.epoch }}.txt
+      changed_when: false
+    
+    - name: Define multiple file context mappings
+      sefcontext:
+        target: "{{ item.path }}"
+        setype: "{{ item.type }}"
+        state: present
+      loop:
+        - { path: "/opt/myapp(/.*)?", type: "httpd_exec_t" }
+        - { path: "/opt/myapp/logs(/.*)?", type: "httpd_log_t" }
+        - { path: "/opt/myapp/config(/.*)?", type: "httpd_config_t" }
+        - { path: "/opt/myapp/tmp(/.*)?", type: "tmp_t" }
+      notify: apply_contexts
+    
+    - name: Create directories for context testing
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: apache
+        group: apache
+        mode: '0755'
+      loop:
+        - /opt/myapp
+        - /opt/myapp/logs
+        - /opt/myapp/config
+        - /opt/myapp/tmp
+    
+    - name: Generate test files with different contexts
+      copy:
+        content: "Test file for {{ item.split('/')[-1] }} context"
+        dest: "{{ item }}/test.txt"
+        owner: apache
+        group: apache
+        mode: '0644'
+      loop:
+        - /opt/myapp
+        - /opt/myapp/logs
+        - /opt/myapp/config
+        - /opt/myapp/tmp
+    
+    - name: Verify applied contexts
+      shell: ls -laZ {{ item }}
+      register: context_verification
+      loop:
+        - /opt/myapp
+        - /opt/myapp/logs
+        - /opt/myapp/config
+        - /opt/myapp/tmp
+      changed_when: false
+    
+    - name: Display context verification results
+      debug:
+        msg: "{{ item.stdout_lines }}"
+      loop: "{{ context_verification.results }}"
+  
+  handlers:
+    - name: apply_contexts
+      command: restorecon -R /opt/myapp
