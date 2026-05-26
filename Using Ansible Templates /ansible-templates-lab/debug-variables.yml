@@ -1,0 +1,15 @@
+---
+- name: Debug Template Variables
+  hosts: webservers
+  gather_facts: yes
+  
+  tasks:
+    - name: Display all variables
+      debug:
+        msg: |
+          Hostname: {{ ansible_hostname }}
+          FQDN: {{ ansible_fqdn }}
+          IP: {{ ansible_default_ipv4.address }}
+          App Environment: {{ app_environment }}
+          Apache Max Clients: {{ apache_max_clients }}
+          Custom Modules: {{ custom_modules | default('None define
