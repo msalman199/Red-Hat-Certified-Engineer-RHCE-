@@ -1,0 +1,162 @@
+---
+- name: Advanced Firewall Configuration with Handlers
+  hosts: webservers
+  become: yes
+  vars:
+    firewall_config_changed: false
+    notification_email: "admin@company.com"
+    log_changes: true
+
+  tasks:
+    - name: Check if firewalld is installed
+      package_facts:
+        manager: auto
+
+    - name: Install firewalld if not present
+      package:
+        name: firewalld
+        state: present
+      when: "'firewalld' not in ansible_facts.packages"
+      notify:
+        - start firewalld
+        - enable firewalld
+        - log installation
+
+    - name: Ensure firewalld is running
+      systemd:
+        name: firewalld
+        state: started
+        enabled: yes
+      register: firewalld_service_status
+
+    - name: Get current firewall configuration
+      command: firewall-cmd --list-all
+      register: current_config
+      changed_when: false
+
+    - name: Configure firewall services
+      firewalld:
+        service: "{{ item }}"
+        zone: public
+        permanent: yes
+        state: enabled
+        immediate: yes
+      loop:
+        - http
+        - https
+        - ssh
+      register: service_config_result
+      notify:
+        - reload firewalld
+        - verify firewall config
+        - log configuration changes
+
+    - name: Configure custom ports
+      firewalld:
+        port: "{{ item }}"
+        zone: public
+        permanent: yes
+        state: enabled
+        immediate: yes
+      loop:
+        - "8080/tcp"
+        - "8443/tcp"
+        - "9000/tcp"
+      register: port_config_result
+      notify:
+        - reload firewalld
+        - verify firewall config
+        - log configuration changes
+
+    - name: Add rich rules for enhanced security
+      firewalld:
+        rich_rule: "{{ item }}"
+        zone: public
+        permanent: yes
+        state: enabled
+        immediate: yes
+      loop:
+        - 'rule family="ipv4" source address="192.168.1.0/24" service name="ssh" accept'
+        - 'rule family="ipv4" source address="10.0.0.0/8" port port="8080" protocol="tcp" accept'
+      register: rich_rule_result
+      notify:
+        - reload firewalld
+        - verify firewall config
+        - log configuration changes
+        - send notification
+
+    - name: Configure firewall for database access (conditional)
+      firewalld:
+        port: "3306/tcp"
+        zone: internal
+        permanent: yes
+        state: enabled
+        immediate: yes
+      when: "'database' in group_names"
+      notify:
+        - reload firewalld
+        - verify firewall config
+        - log database config
+
+  handlers:
+    - name: start firewalld
+      systemd:
+        name: firewalld
+        state: started
+      listen: "start firewalld"
+
+    - name: enable firewalld
+      systemd:
+        name: firewalld
+        enabled: yes
+      listen: "enable firewalld"
+
+    - name: reload firewalld
+      systemd:
+        name: firewalld
+        state: reloaded
+      listen: "reload firewalld"
+
+    - name: verify firewall config
+      command: firewall-cmd --list-all
+      register: verification_result
+      changed_when: false
+      listen: "verify firewall config"
+
+    - name: log installation
+      lineinfile:
+        path: /var/log/firewall-changes.log
+        line: "{{ ansible_date_time.iso8601 }} - Firewalld installed on {{ inventory_hostname }}"
+        create: yes
+      listen: "log installation"
+
+    - name: log configuration changes
+      lineinfile:
+        path: /var/log/firewall-changes.log
+        line: "{{ ansible_date_time.iso8601 }} - Firewall configuration updated on {{ inventory_hostname }}"
+        create: yes
+      when: log_changes | bool
+      listen: "log configuration changes"
+
+    - name: log database config
+      lineinfile:
+        path: /var/log/firewall-changes.log
+        line: "{{ ansible_date_time.iso8601 }} - Database firewall rules applied on {{ inventory_hostname }}"
+        create: yes
+      listen: "log database config"
+
+    - name: send notification
+      mail:
+        to: "{{ notification_email }}"
+        subject: "Firewall Configuration Updated"
+        body: "Firewall rules have been updated on {{ inventory_hostname }} at {{ ansible_date_time.iso8601 }}"
+      delegate_to: localhost
+      when: notification_email is defined
+      listen: "send notification"
+      ignore_errors: yes
+
+    - name: display verification results
+      debug:
+        var: verification_result.stdout_lines
+      when: verification_result is defined
+      listen: "verify firewall config"
