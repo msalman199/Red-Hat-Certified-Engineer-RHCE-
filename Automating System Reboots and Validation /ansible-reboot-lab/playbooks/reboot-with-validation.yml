@@ -1,0 +1,115 @@
+---
+- name: System Reboot with Comprehensive Validation
+  hosts: managed_nodes
+  become: yes
+  gather_facts: yes
+  
+  vars:
+    reboot_timeout: 600
+    connect_timeout: 15
+    post_reboot_delay: 30
+    critical_services:
+      - name: sshd
+        description: "SSH Daemon"
+      - name: NetworkManager
+        description: "Network Manager"
+      - name: chronyd
+        description: "Time Synchronization"
+      - name: systemd-logind
+        description: "Login Manager"
+    
+    validation_commands:
+      - command: "df -h /"
+        description: "Root filesystem space"
+      - command: "free -m"
+        description: "Memory usage"
+      - command: "systemctl is-system-running"
+        description: "System state"
+  
+  pre_tasks:
+    - name: Gather pre-reboot system facts
+      setup:
+      register: pre_reboot_facts
+      
+    - name: Record pre-reboot service states
+      service_facts:
+      register: pre_reboot_services
+      
+    - name: Display pre-reboot system information
+      debug:
+        msg: |
+          Hostname: {{ ansible_hostname }}
+          Kernel: {{ ansible_kernel }}
+          Uptime: {{ ansible_uptime_seconds }} seconds
+          Load Average: {{ ansible_loadavg }}
+  
+  tasks:
+    - name: Create reboot log directory
+      file:
+        path: /var/log/ansible-reboot
+        state: directory
+        mode: '0755'
+        
+    - name: Log reboot initiation
+      lineinfile:
+        path: /var/log/ansible-reboot/reboot.log
+        line: "{{ ansible_date_time.iso8601 }} - Reboot initiated by Ansible"
+        create: yes
+        
+    - name: Perform controlled system reboot
+      reboot:
+        reboot_timeout: "{{ reboot_timeout }}"
+        connect_timeout: "{{ connect_timeout }}"
+        post_reboot_delay: "{{ post_reboot_delay }}"
+        test_command: "systemctl is-system-running --wait"
+        msg: "Ansible-controlled reboot for maintenance"
+      register: reboot_result
+      
+    - name: Log reboot completion
+      lineinfile:
+        path: /var/log/ansible-reboot/reboot.log
+        line: "{{ ansible_date_time.iso8601 }} - Reboot completed in {{ reboot_result.elapsed }} seconds"
+  
+  post_tasks:
+    - name: Gather post-reboot system facts
+      setup:
+      
+    - name: Validate critical services are running
+      systemd:
+        name: "{{ item.name }}"
+        state: started
+        enabled: yes
+      loop: "{{ critical_services }}"
+      register: service_validation
+      
+    - name: Check service status details
+      service_facts:
+      register: post_reboot_services
+      
+    - name: Display service validation results
+      debug:
+        msg: "Service {{ item.name }} ({{ item.description }}): {{ 'RUNNING' if post_reboot_services.ansible_facts.services[item.name + '.service']['state'] == 'running' else 'FAILED' }}"
+      loop: "{{ critical_services }}"
+      
+    - name: Run system validation commands
+      command: "{{ item.command }}"
+      register: validation_results
+      loop: "{{ validation_commands }}"
+      ignore_errors: yes
+      
+    - name: Display validation command results
+      debug:
+        msg: |
+          {{ item.item.description }}:
+          {{ item.stdout }}
+      loop: "{{ validation_results.results }}"
+      when: item.rc == 0
+      
+    - name: Compare system state before and after reboot
+      debug:
+        msg: |
+          System Comparison:
+          - Hostname: {{ ansible_hostname }} (unchanged: {{ ansible_hostname == pre_reboot_facts.ansible_facts.ansible_hostname }})
+          - Kernel: {{ ansible_kernel }} (unchanged: {{ ansible_kernel == pre_reboot_facts.ansible_facts.ansible_kernel }})
+          - Architecture: {{ ansible_architecture }}
+          - Total Memory: {{ ansible_memtotal_mb }} MB
