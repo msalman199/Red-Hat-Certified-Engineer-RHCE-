@@ -1,0 +1,24 @@
+---
+- name: Variable Debugging Examples
+  hosts: localhost
+  vars:
+    defined_var: "I exist"
+    
+  tasks:
+    - name: Safe variable access
+      debug:
+        msg: "Variable value: {{ defined_var | default('Not defined') }}"
+    
+    - name: Check if variable is defined
+      debug:
+        msg: "undefined_var is {{ 'defined' if undefined_var is defined else 'not defined' }}"
+    
+    - name: Conditional task based on variable existence
+      debug:
+        msg: "This runs only if variable exists"
+      when: undefined_var is defined
+    
+    - name: Using default values
+      debug:
+        msg: "Value: {{ undefined_var | default('Default value used') }}"
+EOF
