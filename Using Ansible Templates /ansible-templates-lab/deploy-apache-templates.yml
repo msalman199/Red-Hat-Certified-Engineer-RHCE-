@@ -1,0 +1,108 @@
+---
+- name: Deploy Apache Web Server with Jinja2 Templates
+  hosts: webservers
+  become: yes
+  gather_facts: yes
+  
+  tasks:
+    - name: Display system information
+      debug:
+        msg: |
+          Deploying to: {{ ansible_hostname }}
+          OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
+          IP: {{ ansible_default_ipv4.address }}
+          Environment: {{ app_environment }}
+
+    - name: Install Apache HTTP Server
+      yum:
+        name: httpd
+        state: present
+      notify: restart apache
+
+    - name: Install additional packages
+      yum:
+        name:
+          - httpd-tools
+          - mod_ssl
+        state: present
+
+    - name: Create backup of original httpd.conf
+      copy:
+        src: /etc/httpd/conf/httpd.conf
+        dest: /etc/httpd/conf/httpd.conf.backup
+        remote_src: yes
+        backup: yes
+      ignore_errors: yes
+
+    - name: Deploy Apache configuration from template
+      template:
+        src: httpd.conf.j2
+        dest: /etc/httpd/conf/httpd.conf
+        owner: root
+        group: root
+        mode: '0644'
+        backup: yes
+      notify: restart apache
+
+    - name: Create application directory
+      file:
+        path: "{{ apache_document_root }}/{{ app_name | lower | replace(' ', '_') }}"
+        state: directory
+        owner: apache
+        group: apache
+        mode: '0755'
+
+    - name: Deploy index.html from template
+      template:
+        src: index.html.j2
+        dest: "{{ apache_document_root }}/index.html"
+        owner: apache
+        group: apache
+        mode: '0644'
+
+    - name: Deploy application-specific index.html
+      template:
+        src: index.html.j2
+        dest: "{{ apache_document_root }}/{{ app_name | lower | replace(' ', '_') }}/index.html"
+        owner: apache
+        group: apache
+        mode: '0644'
+
+    - name: Ensure Apache is started and enabled
+      systemd:
+        name: httpd
+        state: started
+        enabled: yes
+
+    - name: Open firewall for HTTP
+      firewalld:
+        service: http
+        permanent: yes
+        state: enabled
+        immediate: yes
+      ignore_errors: yes
+
+    - name: Open firewall for HTTPS (if SSL enabled)
+      firewalld:
+        service: https
+        permanent: yes
+        state: enabled
+        immediate: yes
+      when: enable_ssl
+      ignore_errors: yes
+
+    - name: Validate Apache configuration
+      command: httpd -t
+      register: apache_config_test
+      changed_when: false
+
+    - name: Display configuration test results
+      debug:
+        var: apache_config_test.stdout_lines
+
+  handlers:
+    - name: restart apache
+      systemd:
+        name: httpd
+        state: restarted
+EOF
