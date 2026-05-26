@@ -1,0 +1,51 @@
+---
+# tasks file for database
+- name: Install database server
+  package:
+    name:
+      - "{{ db_package }}"
+      - python3-PyMySQL
+    state: present
+  become: yes
+
+- name: Start and enable database service
+  systemd:
+    name: "{{ db_service }}"
+    state: started
+    enabled: yes
+  become: yes
+
+- name: Open firewall port for database
+  firewalld:
+    port: "{{ db_port }}/tcp"
+    permanent: yes
+    state: enabled
+    immediate: yes
+  become: yes
+  ignore_errors: yes
+
+- name: Set root password
+  mysql_user:
+    name: root
+    password: "{{ db_root_password }}"
+    login_unix_socket: /var/lib/mysql/mysql.sock
+  become: yes
+  ignore_errors: yes
+
+- name: Create application database
+  mysql_db:
+    name: "{{ db_name }}"
+    state: present
+    login_user: root
+    login_password: "{{ db_root_password }}"
+  become: yes
+
+- name: Create application user
+  mysql_user:
+    name: "{{ db_user }}"
+    password: "{{ db_password }}"
+    priv: "{{ db_name }}.*:ALL"
+    state: present
+    login_user: root
+    login_password: "{{ db_root_password }}"
+  become: yes
