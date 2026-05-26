@@ -1,0 +1,91 @@
+---
+- name: Manage SELinux File Contexts
+  hosts: managed_nodes
+  become: yes
+  vars:
+    web_root: /var/www/html
+    custom_web_dir: /opt/webapp
+    log_directory: /var/log/webapp
+  
+  tasks:
+    - name: Create custom web application directory
+      file:
+        path: "{{ custom_web_dir }}"
+        state: directory
+        owner: apache
+        group: apache
+        mode: '0755'
+    
+    - name: Create custom log directory
+      file:
+        path: "{{ log_directory }}"
+        state: directory
+        owner: apache
+        group: apache
+        mode: '0755'
+    
+    - name: Set SELinux file context for custom web directory
+      sefcontext:
+        target: "{{ custom_web_dir }}(/.*)?"
+        setype: httpd_exec_t
+        state: present
+      notify: restore_selinux_contexts
+    
+    - name: Set SELinux file context for log directory
+      sefcontext:
+        target: "{{ log_directory }}(/.*)?"
+        setype: httpd_log_t
+        state: present
+      notify: restore_selinux_contexts
+    
+    - name: Create sample web files
+      copy:
+        content: |
+          #!/bin/bash
+          echo "Content-Type: text/html"
+          echo ""
+          echo "<h1>Custom Web Application</h1>"
+          echo "<p>SELinux Context: $(ls -Z $0)</p>"
+        dest: "{{ custom_web_dir }}/index.cgi"
+        owner: apache
+        group: apache
+        mode: '0755'
+    
+    - name: Create sample log file
+      copy:
+        content: |
+          [{{ ansible_date_time.iso8601 }}] Application started
+          [{{ ansible_date_time.iso8601 }}] SELinux context applied
+        dest: "{{ log_directory }}/app.log"
+        owner: apache
+        group: apache
+        mode: '0644'
+    
+    - name: Verify current file contexts
+      command: ls -Z {{ item }}
+      register: file_contexts
+      loop:
+        - "{{ custom_web_dir }}"
+        - "{{ log_directory }}"
+      changed_when: false
+    
+    - name: Display file contexts
+      debug:
+        msg: "File context for {{ item.item }}: {{ item.stdout }}"
+      loop: "{{ file_contexts.results }}"
+    
+    - name: List all custom SELinux file context rules
+      command: semanage fcontext -l -C
+      register: custom_contexts
+      changed_when: false
+    
+    - name: Display custom SELinux contexts
+      debug:
+        var: custom_contexts.stdout_lines
+  
+  handlers:
+    - name: restore_selinux_contexts
+      command: restorecon -R {{ item }}
+      loop:
+        - "{{ custom_web_dir }}"
+        - "{{ log_directory }}"
