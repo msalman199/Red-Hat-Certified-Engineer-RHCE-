@@ -1,0 +1,82 @@
+---
+- name: Practical Error Handling - Web Server Setup
+  hosts: node1
+  become: yes
+  vars:
+    web_packages:
+      - httpd
+      - mod_ssl
+    backup_packages:
+      - nginx
+    
+  tasks:
+    - name: Web server installation with fallback
+      block:
+        - name: Install Apache web server
+          yum:
+            name: "{{ web_packages }}"
+            state: present
+        
+        - name: Start Apache service
+          systemd:
+            name: httpd
+            state: started
+            enabled: yes
+        
+        - name: Create web content
+          copy:
+            content: |
+              <html>
+                <head><title>Apache Server</title></head>
+                <body><h1>Apache is running successfully!</h1></body>
+              </html>
+            dest: /var/www/html/index.html
+        
+        - name: Set web server type
+          set_fact:
+            web_server: "apache"
+      
+      rescue:
+        - name: Apache installation failed, trying Nginx
+          debug:
+            msg: "Apache installation failed, falling back to Nginx"
+        
+        - name: Install Nginx as fallback
+          yum:
+            name: "{{ backup_packages }}"
+            state: present
+        
+        - name: Start Nginx service
+          systemd:
+            name: nginx
+            state: started
+            enabled: yes
+        
+        - name: Create Nginx web content
+          copy:
+            content: |
+              <html>
+                <head><title>Nginx Server</title></head>
+                <body><h1>Nginx is running as fallback!</h1></body>
+              </html>
+            dest: /usr/share/nginx/html/index.html
+        
+        - name: Set web server type
+          set_fact:
+            web_server: "nginx"
+      
+      always:
+        - name: Display web server status
+          debug:
+            msg: "Web server setup completed using: {{ web_server | default('none') }}"
+        
+        - name: Check web server process
+          command: "ps aux | grep {{ web_server | default('http') }}"
+          register: web_process
+          ignore_errors: yes
+        
+        - name: Display process information
+          debug:
+            var: web_process.stdout_lines
+          when: web_process.rc == 0
+EOF
