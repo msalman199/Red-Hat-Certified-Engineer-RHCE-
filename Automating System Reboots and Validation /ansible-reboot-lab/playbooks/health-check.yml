@@ -1,0 +1,54 @@
+---
+- name: System Health Check After Reboot
+  block:
+    - name: Check system uptime
+      command: uptime
+      register: uptime_check
+      
+    - name: Verify kernel version
+      command: uname -r
+      register: kernel_check
+      
+    - name: Check memory usage
+      command: free -m
+      register: memory_check
+      
+    - name: Check disk usage
+      command: df -h
+      register: disk_check
+      
+    - name: Verify network interfaces
+      command: ip addr show
+      register: network_check
+      
+    - name: Check running services
+      command: systemctl list-units --type=service --state=running
+      register: services_check
+      
+    - name: Test DNS resolution
+      command: nslookup google.com
+      register: dns_check
+      ignore_errors: yes
+      
+    - name: Compile health check results
+      set_fact:
+        health_check_results:
+          uptime: "{{ uptime_check.stdout }}"
+          kernel: "{{ kernel_check.stdout }}"
+          memory_status: "{{ 'OK' if memory_check.rc == 0 else 'FAILED' }}"
+          disk_status: "{{ 'OK' if disk_check.rc == 0 else 'FAILED' }}"
+          network_status: "{{ 'OK' if network_check.rc == 0 else 'FAILED' }}"
+          dns_status: "{{ 'OK' if dns_check.rc == 0 else 'FAILED' }}"
+          
+    - name: Display health check summary
+      debug:
+        var: health_check_results
+        
+  rescue:
+    - name: Health check failed
+      set_fact:
+        health_check_failed: true
+        
+    - name: Log health check failure
+      debug:
+        msg: "Health check failed for {{ inventory_hostname }}"
