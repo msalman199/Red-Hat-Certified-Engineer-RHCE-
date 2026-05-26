@@ -1,0 +1,45 @@
+---
+- name: System Reboot and Validation Playbook
+  hosts: managed_nodes
+  become: yes
+  gather_facts: yes
+  
+  vars:
+    reboot_timeout: 300
+    connect_timeout: 10
+    services_to_check:
+      - sshd
+      - NetworkManager
+      - chronyd
+    
+  tasks:
+    - name: Display current system uptime before reboot
+      command: uptime
+      register: uptime_before
+      
+    - name: Show uptime before reboot
+      debug:
+        msg: "System uptime before reboot: {{ uptime_before.stdout }}"
+    
+    - name: Check if reboot is required
+      stat:
+        path: /var/run/reboot-required
+      register: reboot_required_file
+      
+    - name: Force reboot requirement for demonstration
+      file:
+        path: /var/run/reboot-required
+        state: touch
+      when: not reboot_required_file.stat.exists
+    
+    - name: Perform system reboot
+      reboot:
+        reboot_timeout: "{{ reboot_timeout }}"
+        connect_timeout: "{{ connect_timeout }}"
+        test_command: whoami
+        msg: "Reboot initiated by Ansible automation"
+      register: reboot_result
+      
+    - name: Display reboot completion message
+      debug:
+        msg: "System successfully rebooted. Elapsed time: {{ reboot_result.elapsed }} seconds"
