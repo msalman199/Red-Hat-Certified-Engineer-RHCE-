@@ -1,0 +1,85 @@
+---
+- name: Firewall Configuration Rollback with Handlers
+  hosts: webservers
+  become: yes
+  vars:
+    rollback_timestamp: "{{ ansible_date_time.epoch }}"
+    backup_location: "/tmp/firewall-backups"
+
+  tasks:
+    - name: Create backup directory
+      file:
+        path: "{{ backup_location }}"
+        state: directory
+        mode: '0755'
+
+    - name: Backup current configuration
+      shell: |
+        firewall-cmd --list-all-zones > {{ backup_location }}/zones-{{ rollback_timestamp }}.backup
+        firewall-cmd --get-default-zone > {{ backup_location }}/default-zone-{{ rollback_timestamp }}.backup
+      notify: log backup creation
+
+    - name: Reset firewall to default state
+      command: firewall-cmd --complete-reload
+      notify:
+        - verify reset
+        - log rollback action
+
+    - name: Remove custom zones (if any)
+      firewalld:
+        zone: "{{ item }}"
+        state: absent
+        permanent: yes
+      loop:
+        - custom-web
+        - custom-db
+        - custom-app
+      ignore_errors: yes
+      notify: reload firewalld after cleanup
+
+    - name: Restore basic services only
+      firewalld:
+        service: "{{ item }}"
+        zone: public
+        permanent: yes
+        state: enabled
+        immediate: yes
+      loop:
+        - ssh
+        - dhcpv6-client
+      notify:
+        - reload firewalld after cleanup
+        - verify basic config
+
+  handlers:
+    - name: log backup creation
+      lineinfile:
+        path: /var/log/firewall-rollback.log
+        line: "{{ ansible_date_time.iso8601 }} - Backup created before rollback on {{ inventory_hostname }}"
+        create: yes
+
+    - name: verify reset
+      command: firewall-cmd --list-all
+      register: reset_verification
+      changed_when: false
+
+    - name: log rollback action
+      lineinfile:
+        path: /var/log/firewall-rollback.log
+        line: "{{ ansible_date_time.iso8601 }} - Firewall rollback completed on {{ inventory_hostname }}"
+        create: yes
+
+    - name: reload firewalld after cleanup
+      systemd:
+        name: firewalld
+        state: reloaded
+
+    - name: verify basic config
+      command: firewall-cmd --list-services
+      register: basic_config_check
+      changed_when: false
+
+    - name: display rollback results
+      debug:
+        msg: "Rollback completed. Active services: {{ basic_config_check.stdout }}"
+      when: basic_config_check is defined
