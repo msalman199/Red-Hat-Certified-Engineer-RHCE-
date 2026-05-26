@@ -1,0 +1,20 @@
+---
+- name: Test Host Variables
+  hosts: all
+  gather_facts: no
+  tasks:
+    - name: Display environment information
+      debug:
+        msg: |
+          Host: {{ inventory_hostname }}
+          Environment: {{ environment | default('not_set') }}
+          HTTP Port: {{ http_port | default('not_set') }}
+          Debug Mode: {{ debug_mode | default('not_set') }}
+          Server Role: {{ server_role | default('not_set') }}
+          CPU Cores: {{ cpu_cores | default('not_set') }}
+          Memory: {{ memory_gb | default('not_set') }}GB
+
+    - name: Display custom configuration (if exists)
+      debug:
+        var: custom_config
+      when: custom_config is defined
