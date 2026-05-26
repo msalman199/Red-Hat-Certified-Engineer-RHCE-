@@ -1,0 +1,16 @@
+---
+- name: Include SELinux enforcement tasks
+  include_tasks: enforce.yml
+  tags: enforce
+
+- name: Include file context management tasks
+  include_tasks: contexts.yml
+  tags: contexts
+
+- name: Include troubleshooting tasks
+  include_tasks: troubleshoot.yml
+  tags: troubleshoot
+
+- name: Include boolean management tasks
+  include_tasks: booleans.yml
+  tags: booleans
