@@ -1,0 +1,33 @@
+---
+- name: Comprehensive SELinux Status Check
+  hosts: managed_nodes
+  become: yes
+  
+  tasks:
+    - name: Get detailed SELinux status
+      command: sestatus
+      register: selinux_detailed_status
+      changed_when: false
+    
+    - name: Display detailed SELinux information
+      debug:
+        var: selinux_detailed_status.stdout_lines
+    
+    - name: Check SELinux booleans status
+      command: getsebool -a
+      register: selinux_booleans
+      changed_when: false
+    
+    - name: Count active SELinux booleans
+      debug:
+        msg: "Total SELinux booleans: {{ selinux_booleans.stdout_lines | length }}"
+    
+    - name: Check for SELinux denials in audit log
+      shell: ausearch -m avc -ts recent | head -10
+      register: recent_denials
+      changed_when: false
+      failed_when: false
+    
+    - name: Display recent SELinux denials (if any)
+      debug:
+        msg: "{{ recent_denials.stdout_lines if recent_denials.stdout_lines else 'No recent SELinux denials found' }}"
