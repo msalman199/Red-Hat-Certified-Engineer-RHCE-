@@ -1,0 +1,37 @@
+---
+- name: Final SELinux Configuration Verification
+  hosts: managed_nodes
+  become: yes
+  
+  tasks:
+    - name: Comprehensive SELinux status check
+      shell: |
+        echo "=== SELinux Status ==="
+        sestatus
+        echo ""
+        echo "=== Active Booleans ==="
+        getsebool -a | grep " on" | wc -l
+        echo ""
+        echo "=== Custom File Contexts ==="
+        semanage fcontext -l -C | wc -l
+        echo ""
+        echo "=== Recent Denials ==="
+        ausearch -m avc -ts today 2>/dev/null | wc -l || echo "0"
+      register: final_status
+      changed_when: false
+    
+    - name: Display final verification results
+      debug:
+        var: final_status.stdout_lines
+    
+    - name: Generate final report
+      copy:
+        content: |
+          SELinux Configuration Report
+          Generated: {{ ansible_date_time.iso8601 }}
+          Host: {{ ansible_hostname }}
+          
+          {{ final_status.stdout }}
+          
+          Configuration completed successfully.
+        dest: "/tmp/selinux_final_report_{{ ansible_hostname }}.txt"
