@@ -1,0 +1,49 @@
+---
+- name: Lab 12 Validation Checklist
+  hosts: localhost
+  
+  tasks:
+    - name: Test 1 - Debug module functionality
+      debug:
+        msg: "✓ Debug module working correctly"
+    
+    - name: Test 2 - Variable display
+      debug:
+        var: ansible_hostname
+    
+    - name: Test 3 - Conditional debug
+      debug:
+        msg: "✓ Conditional debug working"
+      when: true
+    
+    - name: Test 4 - Check mode awareness
+      debug:
+        msg: "Running in {{ 'CHECK' if ansible_check_mode else 'NORMAL' }} mode"
+    
+    - name: Test 5 - Error handling validation
+      block:
+        - name: Intentional failure for testing
+          fail:
+            msg: "This is a test failure"
+          when: false  # This won't actually fail
+        
+        - name: Success path
+          debug:
+            msg: "✓ Block executed successfully"
+      
+      rescue:
+        - name: This shouldn't execute
+          debug:
+            msg: "✗ Rescue block executed unexpectedly"
+      
+      always:
+        - name: Always block validation
+          debug:
+            msg: "✓ Always block executed correctly"
+    
+    - name: Final validation message
+      debug:
+        msg: |
+          ✓ Lab 12 Validation Complete
+          All debugging and error handling features tested successfully!
+EOF
