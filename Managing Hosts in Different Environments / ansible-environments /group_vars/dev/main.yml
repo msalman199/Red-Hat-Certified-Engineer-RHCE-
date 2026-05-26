@@ -1,0 +1,26 @@
+---
+# Development Environment Variables
+environment_name: "development"
+app_version: "latest"
+database_name: "myapp_dev"
+database_user: "dev_user"
+database_password: "dev_password"
+log_level: "debug"
+backup_enabled: false
+monitoring_enabled: false
+
+# Application Configuration
+app_config:
+  max_connections: 10
+  timeout: 30
+  cache_enabled: false
+  
+# Security Settings
+firewall_rules:
+  - port: 22
+    protocol: tcp
+    source: "0.0.0.0/0"
+  - port: 8080
+    protocol: tcp
+    source: "0.0.0.0/0"
+EOF
