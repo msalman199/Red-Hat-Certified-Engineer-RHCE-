@@ -1,0 +1,32 @@
+---
+- name: Deploy Apache Virtual Host Configuration
+  hosts: webservers
+  become: yes
+  gather_facts: yes
+  
+  tasks:
+    - name: Deploy virtual host configuration
+      template:
+        src: vhost.conf.j2
+        dest: /etc/httpd/conf.d/{{ ansible_hostname }}.conf
+        owner: root
+        group: root
+        mode: '0644'
+        backup: yes
+      notify: reload apache
+
+    - name: Validate Apache configuration
+      command: httpd -t
+      register: config_test
+      changed_when: false
+
+    - name: Display configuration test results
+      debug:
+        msg: "Apache configuration test: {{ config_test.stdout }}"
+
+  handlers:
+    - name: reload apache
+      systemd:
+        name: httpd
+        state: reloaded
+EOF
