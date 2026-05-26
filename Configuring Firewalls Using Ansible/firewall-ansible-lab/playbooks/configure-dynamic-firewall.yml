@@ -1,0 +1,122 @@
+---
+- name: Configure Dynamic Firewalld Zones and Rules
+  hosts: webservers
+  become: yes
+  vars:
+    backup_config: true
+    config_timestamp: "{{ ansible_date_time.epoch }}"
+
+  tasks:
+    - name: Ensure firewalld is installed and updated
+      package:
+        name: firewalld
+        state: latest
+
+    - name: Ensure firewalld service is running and enabled
+      systemd:
+        name: firewalld
+        state: started
+        enabled: yes
+
+    - name: Backup current firewall configuration
+      command: firewall-cmd --list-all-zones
+      register: firewall_backup
+      when: backup_config | bool
+
+    - name: Save firewall backup to file
+      copy:
+        content: "{{ firewall_backup.stdout }}"
+        dest: "/tmp/firewall-backup-{{ config_timestamp }}.txt"
+      when: backup_config | bool
+
+    - name: Configure firewall zones
+      firewalld:
+        zone: "{{ item.name }}"
+        state: present
+        permanent: yes
+      loop: "{{ firewall_zones }}"
+      notify: reload firewalld
+
+    - name: Set zone targets
+      command: >
+        firewall-cmd --permanent --zone={{ item.name }} 
+        --set-target={{ item.target | default('default') }}
+      loop: "{{ firewall_zones }}"
+      when: item.target is defined
+      notify: reload firewalld
+
+    - name: Configure services for each zone
+      firewalld:
+        zone: "{{ item.0.name }}"
+        service: "{{ item.1 }}"
+        permanent: yes
+        state: enabled
+        immediate: yes
+      with_subelements:
+        - "{{ firewall_zones }}"
+        - services
+        - flags:
+          skip_missing: true
+      notify: reload firewalld
+
+    - name: Configure ports for each zone
+      firewalld:
+        zone: "{{ item.0.name }}"
+        port: "{{ item.1 }}"
+        permanent: yes
+        state: enabled
+        immediate: yes
+      with_subelements:
+        - "{{ firewall_zones }}"
+        - ports
+        - flags:
+          skip_missing: true
+      notify: reload firewalld
+
+    - name: Configure source networks for zones
+      firewalld:
+        zone: "{{ item.0.name }}"
+        source: "{{ item.1 }}"
+        permanent: yes
+        state: enabled
+        immediate: yes
+      with_subelements:
+        - "{{ firewall_zones }}"
+        - sources
+        - flags:
+          skip_missing: true
+      notify: reload firewalld
+
+    - name: Configure rich rules for zones
+      firewalld:
+        zone: "{{ item.0.name }}"
+        rich_rule: "{{ item.1 }}"
+        permanent: yes
+        state: enabled
+        immediate: yes
+      with_subelements:
+        - "{{ firewall_zones }}"
+        - rich_rules
+        - flags:
+          skip_missing: true
+      notify: reload firewalld
+
+    - name: Set default zone
+      command: firewall-cmd --set-default-zone={{ default_zone }}
+      notify: reload firewalld
+
+    - name: Verify zone configurations
+      command: firewall-cmd --list-all-zones
+      register: zone_status
+      changed_when: false
+
+    - name: Display zone configurations
+      debug:
+        var: zone_status.stdout_lines
+
+  handlers:
+    - name: reload firewalld
+      systemd:
+        name: firewalld
+        state: reloaded
+      listen: "reload firewalld"
