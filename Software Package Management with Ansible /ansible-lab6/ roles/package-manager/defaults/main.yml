@@ -1,0 +1,22 @@
+---
+# Default variables for package-manager role
+package_manager_update_cache: true
+package_manager_autoremove: true
+package_manager_install_recommends: true
+
+# Default packages to install
+default_packages:
+  - curl
+  - wget
+  - git
+  - vim
+
+# Default packages to remove
+unwanted_packages:
+  - telnet
+  - rsh-server
+
+# Repository configuration
+enable_epel: true
+enable_custom_repos: false
+custom_repositories: []
