@@ -1,0 +1,14 @@
+---
+environment: production
+app_version: "1.0.0"
+debug_mode: false
+log_level: warning
+max_connections: 200
+cache_enabled: true
+backup_retention_days: 30
+
+database_config:
+  max_connections: 500
+  query_cache_size: 64M
+  innodb_buffer_pool_size: 512M
+EOF
