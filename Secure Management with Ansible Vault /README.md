@@ -61,48 +61,6 @@ Before starting this lab:
 | 🔐 SSH Access | Pre-configured authentication |
 | ⚙️ Dependencies | All required tools installed |
 
----
-
-# 📁 Project Structure
-
-```bash
-vault-lab/
-├── 📄 README.md
-├── 📄 db_secrets.yml
-├── 📄 dev_secrets.yml
-├── 📄 staging_secrets.yml
-├── 📄 secure_deployment.yml
-├── 📄 mixed_vars_playbook.yml
-├── 📄 environment_deployment.yml
-├── 📄 vault_id_playbook.yml
-├── 📄 vault_manager.sh
-│
-├── 📂 templates/
-│   ├── 📄 app_config.j2
-│   └── 📄 secure_service.j2
-│
-├── 📂 vault_passwords/
-│   ├── 📄 .vault_password
-│   ├── 📄 .vault_dev
-│   └── 📄 .vault_prod
-│
-├── 📂 configs/
-│   ├── 📄 dev_config.ini
-│   ├── 📄 staging_config.ini
-│   └── 📄 production_config.ini
-│
-├── 📂 logs/
-│   ├── 📄 deployment.log
-│   └── 📄 vault_operations.log
-│
-└── 📂 screenshots/
-    ├── 📷 vault-create.png
-    ├── 📷 encrypted-file.png
-    └── 📷 deployment-success.png
-```
-
----
-
 # 🧪 Task 1 — Create Encrypted Files
 
 ---
