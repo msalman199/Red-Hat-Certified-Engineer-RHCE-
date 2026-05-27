@@ -1,0 +1,37 @@
+{
+  "hostname": "{{ inventory_hostname }}",
+  "test_timestamp": "{{ ansible_date_time.iso8601 }}",
+  "test_duration_seconds": {{ test_duration }},
+  "system_info": {
+    "os": "{{ ansible_distribution }} {{ ansible_distribution_version }}",
+    "kernel": "{{ ansible_kernel }}",
+    "architecture": "{{ ansible_architecture }}",
+    "cpu_cores": {{ ansible_processor_vcpus }},
+    "memory_mb": {{ ansible_memtotal_mb }},
+    "disk_space_gb": {{ (ansible_mounts | selectattr('mount', 'equalto', '/') | first).size_total / 1024 / 1024 / 1024 | round(2) }}
+  },
+  "performance_tests": {
+    "stress_test": {
+      "status": "{{ 'passed' if stress_test_result.rc == 0 else 'failed' }}",
+      "output": "{{ stress_test_result.stdout | default('') }}"
+    },
+    "io_test": {
+      "status": "{{ 'passed' if io_test_result.rc == 0 else 'failed' }}",
+      "results": "{{ io_test_result.stdout | default('') }}"
+    }{% if inventory_hostname in groups['webservers'] %},
+    "network_test": {
+      "status": "{{ 'passed' if network_test_result.results | selectattr('status', 'equalto', 200) | list | length > 0 else 'failed' }}",
+      "connections_tested": {{ network_test_result.results | length }}
+    }{% endif %}{% if inventory_hostname in groups['databases'] %},
+    "database_test": {
+      "status": "{{ 'passed' if db_test_result.query_result is defined else 'failed' }}",
+      "connection": "{{ 'successful' if db_test_result.query_result is defined else 'failed' }}"
+    }{% endif %}
+  },
+  "ansible_performance": {
+    "facts_gathering_time": "{{ hostvars[inventory_hostname]['ansible_date_time']['epoch'] | int - test_start_time | int }}s",
+    "total_tasks_executed": "{{ ansible_play_batch | length }}",
+    "parallel_execution": true
+  }
+}
+EOF
