@@ -1,0 +1,17 @@
+---
+- name: Connection Troubleshooting
+  hosts: all
+  gather_facts: no
+  
+  tasks:
+    - name: Test basic connectivity
+      ping:
+      
+    - name: Gather minimal facts
+      setup:
+        gather_subset: min
+        
+    - name: Test privilege escalation
+      command: whoami
+      become: yes
+EOF
