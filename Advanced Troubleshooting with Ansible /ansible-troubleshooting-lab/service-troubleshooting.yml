@@ -1,0 +1,89 @@
+- name: Service Troubleshooting and Log Analysis
+  hosts: all
+  become: yes
+  vars:
+    services_to_check:
+      - httpd
+      - mysqld
+      - firewalld
+      - sshd
+    log_files:
+      - /var/log/messages
+      - /var/log/httpd/error_log
+      - /var/log/mysqld.log
+      - /var/log/secure
+      
+  tasks:
+    - name: Check service status
+      systemd:
+        name: "{{ item }}"
+      register: service_status
+      loop: "{{ services_to_check }}"
+      ignore_errors: yes
+      
+    - name: Display service status summary
+      debug:
+        msg: |
+          Service Status Summary:
+          {% for result in service_status.results %}
+          - {{ result.item }}: {{ result.status.ActiveState | default('unknown') }}
+          {% endfor %}
+          
+    - name: Identify failed services
+      set_fact:
+        failed_services: "{{ service_status.results | selectattr('status.ActiveState', 'equalto', 'failed') | map(attribute='item') | list }}"
+        
+    - name: Get detailed status for failed services
+      shell: "systemctl status {{ item }} --no-pager -l"
+      register: failed_service_details
+      loop: "{{ failed_services }}"
+      when: failed_services | length > 0
+      
+    - name: Display failed service details
+      debug:
+        msg: |
+          Failed Service: {{ item.item }}
+          Status Output:
+          {{ item.stdout }}
+      loop: "{{ failed_service_details.results }}"
+      when: failed_services | length > 0
+      
+    - name: Check recent log entries for errors
+      shell: "tail -50 {{ item }} | grep -i error || echo 'No recent errors found'"
+      register: log_errors
+      loop: "{{ log_files }}"
+      ignore_errors: yes
+      changed_when: false
+      
+    - name: Display log error summary
+      debug:
+        msg: |
+          Log File: {{ item.item }}
+          Recent Errors:
+          {{ item.stdout }}
+      loop: "{{ log_errors.results }}"
+      when: "'No recent errors found' not in item.stdout"
+      
+    - name: Check disk space for log directories
+      shell: "df -h {{ item | dirname }}"
+      register: log_disk_space
+      loop: "{{ log_files }}"
+      changed_when: false
+      
+    - name: Analyze system resource usage
+      shell: |
+        echo "=== CPU Usage ==="
+        top -bn1 | grep "Cpu(s)" | awk '{print $2}' | cut -d'%' -f1
+        echo "=== Memory Usage ==="
+        free -m | awk 'NR==2{printf "Memory Usage: %s/%sMB (%.2f%%)\n", $3,$2,$3*100/$2 }'
+        echo "=== Load Average ==="
+        uptime | awk -F'load average:' '{ print $2 }'
+      register: system_resources
+      changed_when: false
+      
+    - name: Display system resource analysis
+      debug:
+        msg: |
+          System Resource Analysis:
+          {{ system_resources.stdout }}
+EOF
