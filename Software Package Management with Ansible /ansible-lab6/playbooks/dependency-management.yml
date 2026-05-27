@@ -1,0 +1,93 @@
+---
+- name: Software Dependencies Management
+  hosts: all
+  become: yes
+  vars:
+    lamp_stack:
+      - httpd
+      - mariadb-server
+      - php
+      - php-mysqlnd
+      - php-gd
+      - php-xml
+      - php-mbstring
+      - php-json
+    development_tools:
+      - "@Development Tools"
+      - cmake
+      - git
+      - nodejs
+      - npm
+    python_packages:
+      - python3
+      - python3-pip
+      - python3-devel
+      - python3-virtualenv
+
+  tasks:
+    - name: Install LAMP stack with dependencies
+      dnf:
+        name: "{{ lamp_stack }}"
+        state: present
+      when: inventory_hostname in groups['webservers']
+
+    - name: Install development tools group
+      dnf:
+        name: "{{ development_tools }}"
+        state: present
+      register: dev_tools_result
+
+    - name: Install Python and related packages
+      dnf:
+        name: "{{ python_packages }}"
+        state: present
+
+    - name: Install pip packages with dependencies
+      pip:
+        name:
+          - flask
+          - requests
+          - sqlalchemy
+        state: present
+        executable: pip3
+      become_user: ansible
+
+    - name: Install Node.js packages globally
+      npm:
+        name: "{{ item }}"
+        global: yes
+        state: present
+      loop:
+        - express
+        - lodash
+        - moment
+      ignore_errors: yes
+
+    - name: Check for broken dependencies
+      command: dnf check
+      register: dependency_check
+      changed_when: false
+      failed_when: false
+
+    - name: Display dependency check results
+      debug:
+        var: dependency_check.stdout_lines
+      when: dependency_check.stdout_lines | length > 0
+
+    - name: Fix broken dependencies if any
+      dnf:
+        name: "*"
+        state: latest
+        update_only: yes
+      when: dependency_check.rc != 0
+
+    - name: Verify critical services can start
+      systemd:
+        name: "{{ item }}"
+        state: started
+        enabled: yes
+      loop:
+        - httpd
+        - mariadb
+      when: inventory_hostname in groups['webservers']
+      ignore_errors: yes
