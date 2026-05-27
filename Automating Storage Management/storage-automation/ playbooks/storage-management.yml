@@ -1,0 +1,72 @@
+---
+- name: Automate Storage Management
+  hosts: storage_servers
+  become: yes
+  vars:
+    target_disk: /dev/sdb
+    volume_group_name: vg_data
+    logical_volumes:
+      - name: lv_web
+        size: 2G
+        mount_point: /var/www
+        filesystem: ext4
+      - name: lv_logs
+        size: 1G
+        mount_point: /var/log/apps
+        filesystem: xfs
+      - name: lv_backup
+        size: 1G
+        mount_point: /backup
+        filesystem: ext4
+
+  tasks:
+    - name: Install required packages
+      package:
+        name:
+          - lvm2
+          - parted
+          - xfsprogs
+        state: present
+
+    - name: Check if disk exists
+      stat:
+        path: "{{ target_disk }}"
+      register: disk_check
+
+    - name: Fail if disk doesn't exist
+      fail:
+        msg: "Target disk {{ target_disk }} does not exist"
+      when: not disk_check.stat.exists
+
+    - name: Create partition on target disk
+      parted:
+        device: "{{ target_disk }}"
+        number: 1
+        state: present
+        part_type: primary
+        part_start: 0%
+        part_end: 100%
+        flags: [lvm]
+
+    - name: Create volume group
+      lvg:
+        vg: "{{ volume_group_name }}"
+        pvs: "{{ target_disk }}1"
+        state: present
+
+    - name: Create logical volumes
+      lvol:
+        vg: "{{ volume_group_name }}"
+        lv: "{{ item.name }}"
+        size: "{{ item.size }}"
+        state: present
+      loop: "{{ logical_volumes }}"
+
+    - name: Display created logical volumes
+      command: lvdisplay
+      register: lv_display
+      changed_when: false
+
+    - name: Show logical volume information
+      debug:
+        msg: "{{ lv_display.stdout_lines }}"
