@@ -1,0 +1,127 @@
+---
+- name: Comprehensive System State Validation
+  hosts: all
+  gather_facts: yes
+  become: yes
+  vars:
+    security_requirements:
+      min_password_length: 8
+      max_login_attempts: 3
+    performance_thresholds:
+      max_cpu_usage: 80
+      max_memory_usage: 85
+      min_disk_free_percent: 15
+    compliance_checks:
+      selinux_enabled: true
+      firewall_active: true
+  
+  tasks:
+    - name: Gather all system facts
+      setup:
+        gather_subset: all
+    
+    - name: Gather package and service facts
+      package_facts:
+        manager: auto
+    
+    - name: Gather service facts
+      service_facts:
+    
+    - name: Create validation report directory
+      file:
+        path: "/tmp/validation_reports"
+        state: directory
+        mode: '0755'
+    
+    - name: System Resource Validation
+      block:
+        - name: Check CPU usage
+          shell: top -bn1 | grep "Cpu(s)" | awk '{print $2}' | cut -d'%' -f1
+          register: cpu_usage
+          changed_when: false
+        
+        - name: Validate CPU usage is within limits
+          assert:
+            that:
+              - cpu_usage.stdout | float < performance_thresholds.max_cpu_usage
+            fail_msg: "CPU usage too high: {{ cpu_usage.stdout }}%"
+            success_msg: "CPU usage acceptable: {{ cpu_usage.stdout }}%"
+          when: cpu_usage.stdout is defined
+        
+        - name: Calculate memory usage percentage
+          set_fact:
+            memory_usage_percent: "{{ ((ansible_memory_mb.real.total - ansible_memory_mb.real.free) / ansible_memory_mb.real.total * 100) | round(2) }}"
+        
+        - name: Validate memory usage
+          assert:
+            that:
+              - memory_usage_percent | float < performance_thresholds.max_memory_usage
+            fail_msg: "Memory usage too high: {{ memory_usage_percent }}%"
+            success_msg: "Memory usage acceptable: {{ memory_usage_percent }}%"
+        
+        - name: Check disk space usage
+          set_fact:
+            root_disk_usage: "{{ ((ansible_mounts | selectattr('mount', 'equalto', '/') | first).size_total - (ansible_mounts | selectattr('mount', 'equalto', '/') | first).size_available) / (ansible_mounts | selectattr('mount', 'equalto', '/') | first).size_total * 100 }}"
+        
+        - name: Validate disk space usage
+          assert:
+            that:
+              - (100 - root_disk_usage | float) > performance_thresholds.min_disk_free_percent
+            fail_msg: "Insufficient disk space: {{ 100 - root_disk_usage | float }}% free"
+            success_msg: "Adequate disk space: {{ 100 - root_disk_usage | float }}% free"
+    
+    - name: Security Configuration Validation
+      block:
+        - name: Check SELinux status
+          command: getenforce
+          register: selinux_status
+          changed_when: false
+          ignore_errors: yes
+        
+        - name: Validate SELinux configuration
+          assert:
+            that:
+              - selinux_status.stdout == "Enforcing"
+            fail_msg: "SELinux is not enforcing: {{ selinux_status.stdout }}"
+            success_msg: "SELinux is properly enforcing"
+          when: 
+            - compliance_checks.selinux_enabled
+            - selinux_status is succeeded
+        
+        - name: Validate firewall service
+          assert:
+            that:
+              - "'firewalld.service' in ansible_facts.services"
+              - ansible_facts.services['firewalld.service'].state == 'running'
+            fail_msg: "Firewall service is not active"
+            success_msg: "Firewall service is running"
+          when: compliance_checks.firewall_active
+    
+    - name: Generate validation report
+      template:
+        src: validation_report.j2
+        dest: "/tmp/validation_reports/{{ ansible_hostname }}_validation_report.txt"
+      vars:
+        validation_timestamp: "{{ ansible_date_time.iso8601 }}"
+        system_info:
+          hostname: "{{ ansible_hostname }}"
+          ip_address: "{{ ansible_default_ipv4.address }}"
+          os: "{{ ansible_distribution }} {{ ansible_distribution_version }}"
+          kernel: "{{ ansible_kernel }}"
+          architecture: "{{ ansible_architecture }}"
+          memory_total: "{{ ansible_memory_mb.real.total }}MB"
+          memory_usage: "{{ memory_usage_percent }}%"
+          cpu_count: "{{ ansible_processor_vcpus }}"
+          uptime: "{{ ansible_uptime_seconds // 3600 }} hours"
+    
+    - name: Display validation summary
+      debug:
+        msg: |
+          Validation Summary for {{ ansible_hostname }}:
+          - OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
+          - Memory: {{ ansible_memory_mb.real.total }}MB ({{ memory_usage_percent }}% used)
+          - Disk: {{ 100 - root_disk_usage | float }}% free space
+          - Services: {{ ansible_facts.services | length }} total services
+          - Packages: {{ ansible_facts.packages | length }} installed packages
+          - Validation completed at: {{ ansible_date_time.iso8601 }}
+EOF
