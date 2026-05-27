@@ -1,0 +1,34 @@
+---
+- name: Test Handler Functionality
+  hosts: webservers
+  become: yes
+  
+  handlers:
+    - name: test restart handler
+      debug:
+        msg: "Handler triggered: Apache would be restarted here"
+      listen: "test apache restart"
+  
+  tasks:
+    - name: Make a configuration change (this will trigger handler)
+      lineinfile:
+        path: /etc/httpd/conf/httpd.conf
+        regexp: '^#ServerName'
+        line: 'ServerName {{ inventory_hostname }}'
+        backup: yes
+      notify: "test apache restart"
+    
+    - name: Make no change (this will NOT trigger handler)
+      lineinfile:
+        path: /etc/httpd/conf/httpd.conf
+        regexp: '^ServerName {{ inventory_hostname }}'
+        line: 'ServerName {{ inventory_hostname }}'
+    
+    - name: Display handler behavior explanation
+      debug:
+        msg: |
+          Handler Behavior:
+          - Handlers only run when notified by tasks that report 'changed'
+          - If a task doesn't change anything, handlers won't be triggered
+          - Handlers run at the end of the play, after all tasks complete
+          - Multiple tasks can notify the same handler, but it only runs once
