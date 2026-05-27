@@ -1,0 +1,77 @@
+---
+- name: Configure Applications for Different Environments
+  hosts: all
+  become: yes
+  vars:
+    config_dir: "/etc/{{ app_name | default('scalable-web-app') }}"
+    
+  tasks:
+    - name: Create application configuration directory
+      file:
+        path: "{{ config_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+      tags: config
+
+    - name: Generate environment-specific application config
+      template:
+        src: app-config.j2
+        dest: "{{ config_dir }}/app.conf"
+        owner: root
+        group: root
+        mode: '0644'
+      notify: restart services
+      tags: config
+
+    - name: Configure log rotation
+      copy:
+        content: |
+          /var/log/{{ app_name | default('scalable-web-app') }}/*.log {
+              daily
+              rotate {{ backup_retention_days | default(7) }}
+              compress
+              delaycompress
+              missingok
+              notifempty
+              create 0644 apache apache
+          }
+        dest: "/etc/logrotate.d/{{ app_name | default('scalable-web-app') }}"
+        owner: root
+        group: root
+        mode: '0644'
+      tags: logging
+
+    - name: Set up monitoring configuration
+      copy:
+        content: |
+          # {{ environment | upper }} Environment Monitoring
+          [general]
+          environment={{ environment | default('development') }}
+          hostname={{ inventory_hostname }}
+          role={{ server_role | default('generic') }}
+          
+          [performance]
+          max_connections={{ max_connections | default(50) }}
+          cache_enabled={{ cache_enabled | default(false) }}
+          log_level={{ log_level | default('info') }}
+          
+          [maintenance]
+          window={{ maintenance_window | default('02:00-04:00') }}
+          backup_retention={{ backup_retention_days | default(7) }}
+        dest: "{{ config_dir }}/monitoring.conf"
+        owner: root
+        group: root
+        mode: '0644'
+      tags: monitoring
+
+  handlers:
+    - name: restart services
+      systemd:
+        name: "{{ item }}"
+        state: restarted
+      loop:
+        - httpd
+      when: inventory_hostname in groups['webservers']
+EOF
