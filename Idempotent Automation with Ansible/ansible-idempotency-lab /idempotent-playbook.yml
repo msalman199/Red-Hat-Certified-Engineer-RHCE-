@@ -1,0 +1,34 @@
+---
+- name: Idempotent Configuration Example
+  hosts: all
+  become: yes
+  tasks:
+    - name: Ensure custom server entry in /etc/hosts
+      lineinfile:
+        path: /etc/hosts
+        line: "192.168.1.100 custom-server"
+        state: present
+        backup: yes
+      
+    - name: Ensure testuser exists
+      user:
+        name: testuser
+        state: present
+        create_home: yes
+        shell: /bin/bash
+      
+    - name: Ensure wget package is installed
+      package:
+        name: wget
+        state: present
+      
+    - name: Ensure httpd package is installed
+      package:
+        name: httpd
+        state: present
+        
+    - name: Ensure httpd service is started and enabled
+      service:
+        name: httpd
+        state: started
+        enabled: yes
