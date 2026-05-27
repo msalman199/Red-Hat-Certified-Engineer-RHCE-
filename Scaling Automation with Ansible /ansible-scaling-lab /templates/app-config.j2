@@ -1,0 +1,38 @@
+# {{ app_name | default('scalable-web-app') }} Configuration
+# Environment: {{ environment | upper }}
+# Generated: {{ ansible_date_time.iso8601 }}
+
+[application]
+name={{ app_name | default('scalable-web-app') }}
+version={{ app_version | default('1.0.0') }}
+environment={{ environment | default('development') }}
+debug={{ debug_mode | default(true) | lower }}
+
+[server]
+hostname={{ inventory_hostname }}
+role={{ server_role | default('generic') }}
+max_connections={{ max_connections | default(50) }}
+
+[logging]
+level={{ log_level | default('info') }}
+file=/var/log/{{ app_name | default('scalable-web-app') }}/app.log
+
+[cache]
+enabled={{ cache_enabled | default(false) | lower }}
+{% if cache_enabled | default(false) %}
+type=redis
+host=localhost
+port=6379
+{% endif %}
+
+{% if inventory_hostname in groups['databases'] %}
+[database]
+max_connections={{ database_config.max_connections | default(100) }}
+query_cache_size={{ database_config.query_cache_size | default('16M') }}
+innodb_buffer_pool_size={{ database_config.innodb_buffer_pool_size | default('128M') }}
+{% endif %}
+
+[maintenance]
+window={{ maintenance_window | default('02:00-04:00') }}
+backup_retention_days={{ backup_retention_days | default(7) }}
+EOF
