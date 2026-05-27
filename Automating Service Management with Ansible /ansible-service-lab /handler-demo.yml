@@ -1,0 +1,69 @@
+---
+- name: Demonstrating Handlers for Service Management
+  hosts: webservers
+  become: yes
+  vars:
+    web_service: "{{ 'httpd' if ansible_os_family == 'RedHat' else 'apache2' }}"
+    config_path: "{{ '/etc/httpd/conf.d' if ansible_os_family == 'RedHat' else '/etc/apache2/sites-available' }}"
+
+  tasks:
+    - name: Create custom Apache configuration
+      copy:
+        content: |
+          # Custom configuration managed by Ansible
+          ServerTokens Prod
+          ServerSignature Off
+          
+          # Custom virtual host
+          <VirtualHost *:80>
+              ServerName {{ inventory_hostname }}
+              DocumentRoot /var/www/html
+              ErrorLog logs/{{ inventory_hostname }}_error.log
+              CustomLog logs/{{ inventory_hostname }}_access.log combined
+          </VirtualHost>
+        dest: "{{ config_path }}/ansible-custom.conf"
+        mode: '0644'
+      notify:
+        - restart web service
+        - validate web service
+
+    - name: Update main index page with timestamp
+      copy:
+        content: |
+          <!DOCTYPE html>
+          <html>
+          <head>
+              <title>Ansible Handler Demo - {{ inventory_hostname }}</title>
+          </head>
+          <body>
+              <h1>Handler Demonstration</h1>
+              <p>Server: {{ inventory_hostname }}</p>
+              <p>Configuration updated: {{ ansible_date_time.iso8601 }}</p>
+              <p>This page triggers handler only when content changes</p>
+          </body>
+          </html>
+        dest: /var/www/html/index.html
+        mode: '0644'
+      notify: restart web service
+
+    - name: Ensure web service is running
+      systemd:
+        name: "{{ web_service }}"
+        state: started
+        enabled: yes
+
+  handlers:
+    - name: restart web service
+      systemd:
+        name: "{{ web_service }}"
+        state: restarted
+      listen: "restart web service"
+
+    - name: validate web service
+      uri:
+        url: "http://{{ ansible_default_ipv4.address }}"
+        method: GET
+        status_code: 200
+      delegate_to: localhost
+      listen: "validate web service"
+EOF
