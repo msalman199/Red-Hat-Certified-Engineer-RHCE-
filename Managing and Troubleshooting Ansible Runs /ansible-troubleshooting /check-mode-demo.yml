@@ -1,0 +1,59 @@
+---
+- name: System Configuration Demo
+  hosts: all
+  become: yes
+  vars:
+    packages_to_install:
+      - vim
+      - git
+      - curl
+      - wget
+    users_to_create:
+      - testuser1
+      - testuser2
+    
+  tasks:
+    - name: Update package cache
+      yum:
+        update_cache: yes
+      tags: packages
+        
+    - name: Install required packages
+      yum:
+        name: "{{ packages_to_install }}"
+        state: present
+      tags: packages
+        
+    - name: Create user accounts
+      user:
+        name: "{{ item }}"
+        state: present
+        shell: /bin/bash
+        create_home: yes
+      loop: "{{ users_to_create }}"
+      tags: users
+        
+    - name: Create application directory
+      file:
+        path: /opt/myapp
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+      tags: directories
+        
+    - name: Configure SSH settings
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^#?PermitRootLogin'
+        line: 'PermitRootLogin no'
+        backup: yes
+      notify: restart sshd
+      tags: security
+      
+  handlers:
+    - name: restart sshd
+      systemd:
+        name: sshd
+        state: restarted
+EOF
