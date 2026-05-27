@@ -1,0 +1,60 @@
+---
+- name: Pre-flight System Checks
+  hosts: all
+  gather_facts: yes
+  tasks:
+    - name: Check disk space
+      shell: df -h / | awk 'NR==2 {print $5}' | sed 's/%//'
+      register: disk_usage
+      changed_when: false
+      
+    - name: Verify sufficient disk space
+      fail:
+        msg: "Insufficient disk space: {{ disk_usage.stdout }}% used"
+      when: disk_usage.stdout|int > 85
+      
+    - name: Check memory availability
+      shell: free -m | awk 'NR==2{printf "%.0f", $3*100/$2}'
+      register: memory_usage
+      changed_when: false
+      
+    - name: Verify sufficient memory
+      fail:
+        msg: "High memory usage: {{ memory_usage.stdout }}%"
+      when: memory_usage.stdout|int > 90
+      
+    - name: Check required ports availability
+      wait_for:
+        port: "{{ item }}"
+        host: "{{ inventory_hostname }}"
+        state: stopped
+        timeout: 5
+      loop:
+        - 80
+        - 8080
+        - 3306
+      ignore_errors: yes
+      register: port_check
+      
+    - name: Verify network connectivity
+      uri:
+        url: "http://{{ item }}"
+        method: HEAD
+        timeout: 10
+      loop:
+        - "google.com"
+        - "github.com"
+      ignore_errors: yes
+      register: network_check
+      
+    - name: Display system information
+      debug:
+        msg:
+          - "Hostname: {{ inventory_hostname }}"
+          - "OS: {{ ansible_distribution }} {{ ansible_distribution_version }}"
+          - "Architecture: {{ ansible_architecture }}"
+          - "CPU Cores: {{ ansible_processor_vcpus }}"
+          - "Total Memory: {{ ansible_memtotal_mb }}MB"
+          - "Disk Usage: {{ disk_usage.stdout }}%"
+          - "Memory Usage: {{ memory_usage.stdout }}%"
+EOF
