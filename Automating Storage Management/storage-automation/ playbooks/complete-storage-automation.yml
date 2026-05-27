@@ -1,0 +1,132 @@
+---
+- name: Complete Storage Management Automation
+  hosts: storage_servers
+  become: yes
+  vars:
+    target_disk: /dev/sdb
+    volume_group_name: vg_data
+    logical_volumes:
+      - name: lv_web
+        size: 2G
+        mount_point: /var/www
+        filesystem: ext4
+        mount_options: defaults
+        dump: 1
+        passno: 2
+      - name: lv_logs
+        size: 1G
+        mount_point: /var/log/apps
+        filesystem: xfs
+        mount_options: defaults,noatime
+        dump: 1
+        passno: 2
+      - name: lv_backup
+        size: 1G
+        mount_point: /backup
+        filesystem: ext4
+        mount_options: defaults
+        dump: 1
+        passno: 2
+
+  tasks:
+    - name: Install required packages
+      package:
+        name:
+          - lvm2
+          - parted
+          - xfsprogs
+        state: present
+
+    - name: Check if disk exists
+      stat:
+        path: "{{ target_disk }}"
+      register: disk_check
+
+    - name: Fail if disk doesn't exist
+      fail:
+        msg: "Target disk {{ target_disk }} does not exist"
+      when: not disk_check.stat.exists
+
+    - name: Create partition on target disk
+      parted:
+        device: "{{ target_disk }}"
+        number: 1
+        state: present
+        part_type: primary
+        part_start: 0%
+        part_end: 100%
+        flags: [lvm]
+
+    - name: Create volume group
+      lvg:
+        vg: "{{ volume_group_name }}"
+        pvs: "{{ target_disk }}1"
+        state: present
+
+    - name: Create logical volumes
+      lvol:
+        vg: "{{ volume_group_name }}"
+        lv: "{{ item.name }}"
+        size: "{{ item.size }}"
+        state: present
+      loop: "{{ logical_volumes }}"
+
+    - name: Create mount point directories
+      file:
+        path: "{{ item.mount_point }}"
+        state: directory
+        mode: '0755'
+      loop: "{{ logical_volumes }}"
+
+    - name: Format logical volumes with specified filesystem
+      filesystem:
+        fstype: "{{ item.filesystem }}"
+        dev: "/dev/{{ volume_group_name }}/{{ item.name }}"
+        force: no
+      loop: "{{ logical_volumes }}"
+
+    - name: Backup original fstab
+      copy:
+        src: /etc/fstab
+        dest: /etc/fstab.backup.{{ ansible_date_time.epoch }}
+        remote_src: yes
+
+    - name: Mount logical volumes and add to fstab
+      mount:
+        path: "{{ item.mount_point }}"
+        src: "/dev/{{ volume_group_name }}/{{ item.name }}"
+        fstype: "{{ item.filesystem }}"
+        opts: "{{ item.mount_options }}"
+        dump: "{{ item.dump }}"
+        passno: "{{ item.passno }}"
+        state: mounted
+      loop: "{{ logical_volumes }}"
+
+    - name: Create test files to verify functionality
+      copy:
+        content: |
+          Storage automation test successful!
+          Logical Volume: {{ item.name }}
+          Mount Point: {{ item.mount_point }}
+          Filesystem: {{ item.filesystem }}
+          Created: {{ ansible_date_time.iso8601 }}
+        dest: "{{ item.mount_point }}/storage_test.txt"
+        mode: '0644'
+      loop: "{{ logical_volumes }}"
+
+    - name: Display final storage configuration
+      shell: |
+        echo "=== Volume Groups ==="
+        vgdisplay --short
+        echo "=== Logical Volumes ==="
+        lvdisplay --short
+        echo "=== Mounted Filesystems ==="
+        df -h | grep vg_data
+        echo "=== fstab Entries ==="
+        grep vg_data /etc/fstab
+      register: storage_summary
+      changed_when: false
+
+    - name: Show storage configuration summary
+      debug:
+        msg: "{{ storage_summary.stdout_lines }}"
