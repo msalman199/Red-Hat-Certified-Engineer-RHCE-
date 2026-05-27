@@ -1,0 +1,61 @@
+---
+- name: Setup Directory Structure for ACL Testing
+  hosts: webservers
+  become: yes
+  vars:
+    test_directories:
+      - path: /opt/projects
+        owner: root
+        group: developers
+        mode: '0755'
+      - path: /opt/projects/web-app
+        owner: alice
+        group: developers
+        mode: '0775'
+      - path: /opt/projects/testing
+        owner: bob
+        group: testers
+        mode: '0775'
+      - path: /opt/projects/admin
+        owner: charlie
+        group: admins
+        mode: '0770'
+
+    test_files:
+      - path: /opt/projects/web-app/index.html
+        content: "<html><body>Web Application</body></html>"
+        owner: alice
+        group: developers
+      - path: /opt/projects/testing/test-results.txt
+        content: "Test Results: All tests passed"
+        owner: bob
+        group: testers
+      - path: /opt/projects/admin/config.conf
+        content: "admin_setting=true"
+        owner: charlie
+        group: admins
+
+  tasks:
+    - name: Install ACL package
+      package:
+        name: acl
+        state: present
+
+    - name: Create project directories
+      file:
+        path: "{{ item.path }}"
+        state: directory
+        owner: "{{ item.owner }}"
+        group: "{{ item.group }}"
+        mode: "{{ item.mode }}"
+      loop: "{{ test_directories }}"
+
+    - name: Create test files
+      copy:
+        content: "{{ item.content }}"
+        dest: "{{ item.path }}"
+        owner: "{{ item.owner }}"
+        group: "{{ item.group }}"
+        mode: '0644'
+      loop: "{{ test_files }}"
+EOF
