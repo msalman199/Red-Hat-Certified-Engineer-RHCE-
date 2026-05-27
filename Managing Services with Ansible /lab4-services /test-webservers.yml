@@ -1,0 +1,57 @@
+---
+- name: Test Web Server Functionality
+  hosts: webservers
+  become: yes
+  
+  tasks:
+    - name: Gather service facts
+      service_facts:
+    
+    - name: Verify httpd service is running
+      assert:
+        that:
+          - ansible_facts.services['httpd.service'].state == 'running'
+          - ansible_facts.services['httpd.service'].status == 'enabled'
+        fail_msg: "Apache service is not properly configured"
+        success_msg: "Apache service is running and enabled"
+    
+    - name: Check Apache process
+      command: pgrep -f httpd
+      register: apache_processes
+      changed_when: false
+    
+    - name: Display Apache process count
+      debug:
+        msg: "Apache processes running: {{ apache_processes.stdout_lines | length }}"
+    
+    - name: Test HTTP response from localhost
+      uri:
+        url: "http://localhost"
+        return_content: yes
+      register: local_response
+    
+    - name: Verify response contains expected content
+      assert:
+        that:
+          - "'Apache Web Server' in local_response.content"
+          - "inventory_hostname in local_response.content"
+        fail_msg: "Web server response does not contain expected content"
+        success_msg: "Web server is serving correct content"
+
+- name: Test Web Servers from Control Node
+  hosts: localhost
+  connection: local
+  
+  tasks:
+    - name: Test connectivity to all web servers
+      uri:
+        url: "http://{{ hostvars[item]['ansible_default_ipv4']['address'] }}"
+        method: GET
+        status_code: 200
+      loop: "{{ groups['webservers'] }}"
+      register: external_tests
+    
+    - name: Display external test results
+      debug:
+        msg: "Successfully connected to {{ item.item }} - Status: {{ item.status }}"
+      loop: "{{ external_tests.results }}"
