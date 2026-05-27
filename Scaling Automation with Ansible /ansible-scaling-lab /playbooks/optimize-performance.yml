@@ -1,0 +1,40 @@
+---
+- name: Optimize Ansible Performance for Scale
+  hosts: localhost
+  gather_facts: no
+  vars:
+    optimization_results: []
+    
+  tasks:
+    - name: Test current Ansible configuration
+      debug:
+        msg: "Testing optimized Ansible configuration"
+      
+    - name: Benchmark fact gathering with optimization
+      setup:
+      delegate_to: "{{ item }}"
+      loop: "{{ groups['all'] }}"
+      register: fact_gathering_results
+      
+    - name: Test parallel task execution
+      ping:
+      delegate_to: "{{ item }}"
+      loop: "{{ groups['all'] }}"
+      register: ping_results
+      
+    - name: Calculate performance metrics
+      set_fact:
+        total_hosts: "{{ groups['all'] | length }}"
+        successful_pings: "{{ ping_results.results | selectattr('ping', 'defined') | list | length }}"
+        fact_gathering_time: "{{ ansible_date_time.epoch }}"
+        
+    - name: Display optimization results
+      debug:
+        msg:
+          - "Performance Optimization Results:"
+          - "Total hosts managed: {{ total_hosts }}"
+          - "Successful connections: {{ successful_pings }}"
+          - "Fact caching enabled: {{ ansible_facts_cacheable | default(false) }}"
+          - "Current forks setting: {{ ansible_forks | default(5) }}"
+          - "SSH pipelining: {{ ansible_ssh_pipelining | default(false) }}"
+EOF
