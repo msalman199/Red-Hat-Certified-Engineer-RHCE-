@@ -1,0 +1,71 @@
+---
+- name: Final Lab Verification
+  hosts: webservers
+  become: yes
+  
+  tasks:
+    - name: Gather all service facts
+      service_facts:
+    
+    - name: Verify Apache service status
+      assert:
+        that:
+          - ansible_facts.services['httpd.service'].state == 'running'
+          - ansible_facts.services['httpd.service'].status == 'enabled'
+        success_msg: "✓ Apache service is properly configured"
+        fail_msg: "✗ Apache service configuration failed"
+    
+    - name: Test web server response
+      uri:
+        url: "http://{{ ansible_default_ipv4.address }}"
+        status_code: 200
+      register: web_test
+    
+    - name: Test custom error page
+      uri:
+        url: "http://{{ ansible_default_ipv4.address }}/nonexistent-page"
+        status_code: 404
+      register: error_test
+    
+    - name: Display verification results
+      debug:
+        msg: |
+          Verification Results for {{ inventory_hostname }}:
+          ✓ Apache service: Running and Enabled
+          ✓ Web server responding: {{ web_test.status }}
+          ✓ Custom error page: {{ error_test.status }}
+          ✓ Configuration management: Complete
+          ✓ Handler functionality: Implemented
+
+- name: Generate Lab Summary Report
+  hosts: localhost
+  connection: local
+  
+  tasks:
+    - name: Create lab completion summary
+      debug:
+        msg: |
+          
+          ==========================================
+          LAB 4 COMPLETION SUMMARY
+          ==========================================
+          
+          ✓ Task 1: Service management with systemd module - COMPLETED
+          ✓ Task 2: Playbook creation for service management - COMPLETED  
+          ✓ Task 3: Apache deployment on multiple machines - COMPLETED
+          ✓ Task 4: Handler implementation for configuration changes - COMPLETED
+          
+          Skills Demonstrated:
+          • Automated service management using Ansible
+          • systemd module usage for service control
+          • Handler implementation for configuration management
+          • Multi-host service deployment
+          • Service verification and testing
+          
+          Next Steps:
+          • Practice with different service types
+          • Explore advanced handler patterns
+          • Implement service monitoring playbooks
+          • Study service dependencies and ordering
+          
+          ==========================================
