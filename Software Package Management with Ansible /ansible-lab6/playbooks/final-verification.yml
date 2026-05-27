@@ -1,0 +1,41 @@
+---
+- name: Final Package Management Verification
+  hosts: all
+  become: yes
+  tasks:
+    - name: Gather package facts
+      package_facts:
+        manager: auto
+
+    - name: Verify essential packages are installed
+      assert:
+        that:
+          - "'git' in ansible_facts.packages"
+          - "'wget' in ansible_facts.packages"
+          - "'curl' in ansible_facts.packages"
+        fail_msg: "Essential packages are missing"
+        success_msg: "All essential packages are installed"
+
+    - name: Check repository configuration
+      find:
+        paths: /etc/yum.repos.d/
+        patterns: "*.repo"
+      register: repo_files
+
+    - name: Verify repositories are configured
+      debug:
+        msg: "Found {{ repo_files.files | length }} repository files"
+
+    - name: Test package manager functionality
+      dnf:
+        list: updates
+      register: updates_check
+
+    - name: Display verification summary
+      debug:
+        msg: |
+          === PACKAGE MANAGEMENT VERIFICATION COMPLETE ===
+          - Essential packages: INSTALLED
+          - Repository files: {{ repo_files.files | length }} found
+          - Package manager: FUNCTIONAL
+          - Available updates: {{ updates_check.results | length }}
