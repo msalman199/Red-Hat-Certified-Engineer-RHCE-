@@ -1,0 +1,56 @@
+---
+- name: Advanced Configuration Validation
+  hosts: all
+  gather_facts: yes
+  vars:
+    required_packages:
+      - httpd
+      - firewalld
+    required_services:
+      - httpd
+      - firewalld
+    min_disk_space_gb: 10
+  
+  tasks:
+    - name: Gather package facts
+      package_facts:
+        manager: auto
+    
+    - name: Gather service facts
+      service_facts:
+    
+    - name: Validate required packages are installed
+      assert:
+        that:
+          - item in ansible_facts.packages
+        fail_msg: "Required package {{ item }} is not installed"
+        success_msg: "Package {{ item }} is installed"
+      loop: "{{ required_packages }}"
+      when: ansible_os_family == "RedHat"
+    
+    - name: Validate critical services are running
+      assert:
+        that:
+          - ansible_facts.services[item + '.service'].state == 'running'
+        fail_msg: "Service {{ item }} is not running"
+        success_msg: "Service {{ item }} is running"
+      loop: "{{ required_services }}"
+      when: 
+        - ansible_os_family == "RedHat"
+        - item + '.service' in ansible_facts.services
+    
+    - name: Check available disk space
+      assert:
+        that:
+          - (ansible_mounts | selectattr('mount', 'equalto', '/') | first).size_available > (min_disk_space_gb * 1024 * 1024 * 1024)
+        fail_msg: "Insufficient disk space on root filesystem"
+        success_msg: "Adequate disk space available"
+    
+    - name: Validate firewall configuration
+      assert:
+        that:
+          - ansible_facts.services['firewalld.service'].state == 'running'
+        fail_msg: "Firewall service is not running"
+        success_msg: "Firewall service is active"
+      when: "'firewalld.service' in ansible_facts.services"
+EOF
