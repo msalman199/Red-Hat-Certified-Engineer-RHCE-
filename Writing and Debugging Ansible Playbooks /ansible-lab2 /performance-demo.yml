@@ -1,0 +1,38 @@
+---
+- name: Performance Optimization Demo
+  hosts: webservers
+  become: yes
+  strategy: free  # Allows hosts to run independently
+  
+  tasks:
+    - name: Install multiple packages efficiently
+      yum:
+        name:
+          - git
+          - tree
+          - unzip
+          - wget
+        state: present
+        
+    - name: Parallel file creation
+      copy:
+        content: "File {{ item }}"
+        dest: "/tmp/file{{ item }}.txt"
+      loop:
+        - 1
+        - 2
+        - 3
+        - 4
+        - 5
+      async: 10  # Run asynchronously
+      poll: 0    # Fire and forget
+      register: async_results
+      
+    - name: Wait for async tasks to complete
+      async_status:
+        jid: "{{ item.ansible_job_id }}"
+      loop: "{{ async_results.results }}"
+      register: async_poll_results
+      until: async_poll_results.finished
+      retries: 10
+      delay: 1
