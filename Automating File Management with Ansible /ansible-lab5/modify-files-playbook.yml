@@ -1,0 +1,141 @@
+---
+- name: Modify Files Using Lineinfile Module
+  hosts: all
+  become: yes
+  vars:
+    new_ssh_port: 2222
+    app_debug_mode: true
+    environment_type: "development"
+    
+  tasks:
+    - name: Modify SSH port in configuration
+      lineinfile:
+        path: /etc/ssh/sshd_config_lab
+        regexp: '^Port\s+'
+        line: 'Port {{ new_ssh_port }}'
+        backup: yes
+      notify: SSH config modified
+      
+    - name: Enable SSH X11 forwarding
+      lineinfile:
+        path: /etc/ssh/sshd_config_lab
+        regexp: '^X11Forwarding\s+'
+        line: 'X11Forwarding yes'
+        backup: yes
+        
+    - name: Add new SSH security setting
+      lineinfile:
+        path: /etc/ssh/sshd_config_lab
+        line: 'MaxAuthTries 3'
+        insertafter: '^PermitRootLogin'
+        create: yes
+        
+    - name: Modify application debug setting
+      lineinfile:
+        path: /opt/lab-app/config/application.properties
+        regexp: '^app\.debug='
+        line: 'app.debug={{ app_debug_mode | lower }}'
+        backup: yes
+        
+    - name: Update application port
+      lineinfile:
+        path: /opt/lab-app/config/application.properties
+        regexp: '^app\.port='
+        line: 'app.port=9090'
+        
+    - name: Add new database connection pool setting
+      lineinfile:
+        path: /opt/lab-app/config/application.properties
+        line: 'db.pool.max=20'
+        insertafter: '^db\.user='
+        
+    - name: Enable SSL security
+      lineinfile:
+        path: /opt/lab-app/config/application.properties
+        regexp: '^security\.ssl='
+        line: 'security.ssl=true'
+        
+    - name: Change environment in system config
+      lineinfile:
+        path: /opt/lab-app/config/system.conf
+        regexp: '^ENVIRONMENT='
+        line: 'ENVIRONMENT={{ environment_type }}'
+        backup: yes
+        
+    - name: Increase max connections
+      lineinfile:
+        path: /opt/lab-app/config/system.conf
+        regexp: '^MAX_CONNECTIONS='
+        line: 'MAX_CONNECTIONS=200'
+        
+    - name: Enable backup functionality
+      lineinfile:
+        path: /opt/lab-app/config/system.conf
+        regexp: '^BACKUP_ENABLED='
+        line: 'BACKUP_ENABLED=yes'
+        
+    - name: Add backup schedule setting
+      lineinfile:
+        path: /opt/lab-app/config/system.conf
+        line: 'BACKUP_SCHEDULE=daily'
+        insertafter: '^BACKUP_ENABLED='
+        
+    - name: Enable monitoring
+      lineinfile:
+        path: /opt/lab-app/config/system.conf
+        regexp: '^MONITORING='
+        line: 'MONITORING=enabled'
+        
+    - name: Add monitoring port
+      lineinfile:
+        path: /opt/lab-app/config/system.conf
+        line: 'MONITORING_PORT=9999'
+        insertafter: '^MONITORING='
+        
+    - name: Remove a specific line (disable password authentication)
+      lineinfile:
+        path: /etc/ssh/sshd_config_lab
+        regexp: '^PasswordAuthentication yes'
+        state: absent
+        backup: yes
+        
+    - name: Add password authentication disabled
+      lineinfile:
+        path: /etc/ssh/sshd_config_lab
+        line: 'PasswordAuthentication no'
+        insertafter: '^PubkeyAuthentication'
+        
+    - name: Create modification summary file
+      lineinfile:
+        path: /opt/lab-app/modification-log.txt
+        line: "{{ item }}"
+        create: yes
+        mode: '0644'
+      loop:
+        - "=== FILE MODIFICATION LOG ==="
+        - "Date: {{ ansible_date_time.iso8601 }}"
+        - "Host: {{ inventory_hostname }}"
+        - "Modified by: Ansible Lab 5"
+        - ""
+        - "SSH Configuration Changes:"
+        - "- Port changed to {{ new_ssh_port }}"
+        - "- X11 forwarding enabled"
+        - "- Max auth tries set to 3"
+        - "- Password authentication disabled"
+        - ""
+        - "Application Configuration Changes:"
+        - "- Debug mode: {{ app_debug_mode }}"
+        - "- Port changed to 9090"
+        - "- SSL enabled"
+        - "- Database pool max set to 20"
+        - ""
+        - "System Configuration Changes:"
+        - "- Environment: {{ environment_type }}"
+        - "- Max connections: 200"
+        - "- Backup enabled with daily schedule"
+        - "- Monitoring enabled on port 9999"
+        
+  handlers:
+    - name: SSH config modified
+      debug:
+        msg: "SSH configuration has been modified on {{ inventory_hostname }}"
