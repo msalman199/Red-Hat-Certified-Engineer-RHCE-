@@ -1,0 +1,55 @@
+---
+- name: Install and Configure Apache Web Server
+  hosts: webservers
+  become: yes
+  vars:
+    package_name: httpd
+    service_name: httpd
+    document_root: /var/www/html
+    
+  tasks:
+    - name: Install Apache package
+      yum:
+        name: "{{ package_name }}"
+        state: present
+      tags: install
+      
+    - name: Start and enable Apache service
+      systemd:
+        name: "{{ service_name }}"
+        state: started
+        enabled: yes
+      tags: service
+      
+    - name: Create custom index.html
+      copy:
+        content: |
+          <html>
+          <head><title>Ansible Lab 2</title></head>
+          <body>
+            <h1>Welcome to {{ inventory_hostname }}</h1>
+            <p>This server was configured by Ansible!</p>
+            <p>Server IP: {{ ansible_default_ipv4.address }}</p>
+          </body>
+          </html>
+        dest: "{{ document_root }}/index.html"
+        owner: apache
+        group: apache
+        mode: '0644'
+      tags: content
+      
+    - name: Configure firewall for HTTP
+      firewalld:
+        service: http
+        permanent: yes
+        state: enabled
+        immediate: yes
+      tags: firewall
+      
+    - name: Verify Apache is responding
+      uri:
+        url: "http://{{ inventory_hostname }}"
+        method: GET
+        status_code: 200
+      delegate_to: localhost
+      tags: verify
