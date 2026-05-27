@@ -1,0 +1,32 @@
+---
+- name: Variable Troubleshooting Demo
+  hosts: webservers
+  vars:
+    app_name: myapp
+    app_version: "1.0"
+    
+  tasks:
+    - name: Debug variables
+      debug:
+        msg: |
+          App: {{ app_name }}
+          Version: {{ app_version }}
+          Undefined: {{ undefined_var | default('Not defined') }}
+          
+    - name: Create config with template
+      copy:
+        content: |
+          # Configuration for {{ app_name }}
+          version={{ app_version }}
+          hostname={{ ansible_hostname }}
+          ip_address={{ ansible_default_ipv4.address }}
+        dest: /tmp/app.conf
+        
+    - name: Show configuration
+      command: cat /tmp/app.conf
+      register: config_content
+      
+    - name: Display config content
+      debug:
+        var: config_content.stdout_lines
+EOF
