@@ -1,0 +1,51 @@
+---
+- name: Configure Repositories Using Templates
+  hosts: all
+  become: yes
+  vars:
+    repositories:
+      - name: "custom-app"
+        description: "Custom Application Repository"
+        baseurl: "https://repo.example.com/el8/$basearch/"
+        gpgkey: "https://repo.example.com/RPM-GPG-KEY-custom"
+        enabled: 1
+        gpgcheck: 1
+        priority: 10
+      - name: "testing-repo"
+        description: "Testing Repository"
+        baseurl: "https://test.example.com/el8/$basearch/"
+        enabled: 0
+        gpgcheck: 0
+
+  tasks:
+    - name: Create repository files from template
+      template:
+        src: custom.repo.j2
+        dest: "/etc/yum.repos.d/{{ item.name }}.repo"
+        owner: root
+        group: root
+        mode: '0644'
+      loop: "{{ repositories }}"
+      vars:
+        repo_name: "{{ item.name }}"
+        repo_description: "{{ item.description }}"
+        repo_baseurl: "{{ item.baseurl }}"
+        repo_enabled: "{{ item.enabled }}"
+        repo_gpgcheck: "{{ item.gpgcheck }}"
+        repo_gpgkey: "{{ item.gpgkey | default(omit) }}"
+        repo_priority: "{{ item.priority | default(omit) }}"
+
+    - name: Update repository cache
+      dnf:
+        update_cache: yes
+
+    - name: List configured repositories
+      find:
+        paths: /etc/yum.repos.d/
+        patterns: "*.repo"
+      register: repo_files
+
+    - name: Display repository files
+      debug:
+        msg: "Repository file: {{ item.path }}"
+      loop: "{{ repo_files.files }}"
