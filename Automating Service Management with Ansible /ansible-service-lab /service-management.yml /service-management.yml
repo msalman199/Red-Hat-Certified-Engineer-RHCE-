@@ -1,0 +1,63 @@
+---
+- name: Comprehensive Service Management with Ansible
+  hosts: webservers
+  become: yes
+  vars:
+    web_service_name: "{{ 'httpd' if ansible_os_family == 'RedHat' else 'apache2' }}"
+    web_port: 80
+    custom_index_content: |
+      <!DOCTYPE html>
+      <html>
+      <head>
+          <title>Ansible Managed Server</title>
+      </head>
+      <body>
+          <h1>Welcome to {{ inventory_hostname }}</h1>
+          <p>This server is managed by Ansible</p>
+          <p>Service: {{ web_service_name }}</p>
+          <p>Last updated: {{ ansible_date_time.iso8601 }}</p>
+      </body>
+      </html>
+
+  tasks:
+    - name: Ensure web service is installed
+      package:
+        name: "{{ web_service_name }}"
+        state: present
+
+    - name: Create custom index.html
+      copy:
+        content: "{{ custom_index_content }}"
+        dest: /var/www/html/index.html
+        mode: '0644'
+      notify: restart web service
+
+    - name: Configure firewall for web service (RHEL/CentOS)
+      firewalld:
+        service: http
+        permanent: yes
+        state: enabled
+        immediate: yes
+      when: ansible_os_family == "RedHat"
+      ignore_errors: yes
+
+    - name: Ensure web service is started and enabled
+      systemd:
+        name: "{{ web_service_name }}"
+        state: started
+        enabled: yes
+        daemon_reload: yes
+
+    - name: Check if web service is listening on port {{ web_port }}
+      wait_for:
+        port: "{{ web_port }}"
+        host: "{{ ansible_default_ipv4.address }}"
+        timeout: 30
+      delegate_to: localhost
+
+  handlers:
+    - name: restart web service
+      systemd:
+        name: "{{ web_service_name }}"
+        state: restarted
+EOF
