@@ -1,0 +1,14 @@
+---
+environment: staging
+app_version: "1.0.0-rc"
+debug_mode: false
+log_level: info
+max_connections: 100
+cache_enabled: true
+backup_retention_days: 14
+
+database_config:
+  max_connections: 200
+  query_cache_size: 32M
+  innodb_buffer_pool_size: 256M
+EOF
