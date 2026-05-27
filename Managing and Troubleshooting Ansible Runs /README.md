@@ -10,7 +10,7 @@
 
 ---
 
-# 📘 Lab: Managing and Troubleshooting Ansible Runs
+# 📘 Managing and Troubleshooting Ansible Runs
 
 ---
 
