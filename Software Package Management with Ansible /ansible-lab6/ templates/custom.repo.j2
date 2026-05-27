@@ -1,0 +1,11 @@
+[{{ repo_name }}]
+name={{ repo_description }}
+baseurl={{ repo_baseurl }}
+enabled={{ repo_enabled | default(1) }}
+gpgcheck={{ repo_gpgcheck | default(1) }}
+{% if repo_gpgkey is defined %}
+gpgkey={{ repo_gpgkey }}
+{% endif %}
+{% if repo_priority is defined %}
+priority={{ repo_priority }}
+{% endif %}
