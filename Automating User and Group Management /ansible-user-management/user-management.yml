@@ -1,0 +1,70 @@
+---
+- name: Automate User and Group Management
+  hosts: webservers
+  become: yes
+  vars:
+    # Define groups to be created
+    user_groups:
+      - name: developers
+        gid: 3001
+      - name: testers
+        gid: 3002
+      - name: admins
+        gid: 3003
+    
+    # Define users with their properties
+    system_users:
+      - username: alice
+        full_name: "Alice Johnson"
+        primary_group: developers
+        secondary_groups: 
+          - admins
+        shell: /bin/bash
+        create_home: yes
+        password: "$6$rounds=656000$salt$encrypted_password_here"
+        
+      - username: bob
+        full_name: "Bob Smith"
+        primary_group: testers
+        secondary_groups: 
+          - developers
+        shell: /bin/bash
+        create_home: yes
+        password: "$6$rounds=656000$salt$encrypted_password_here"
+        
+      - username: charlie
+        full_name: "Charlie Brown"
+        primary_group: admins
+        secondary_groups: []
+        shell: /bin/bash
+        create_home: yes
+        password: "$6$rounds=656000$salt$encrypted_password_here"
+
+  tasks:
+    - name: Create system groups
+      group:
+        name: "{{ item.name }}"
+        gid: "{{ item.gid }}"
+        state: present
+      loop: "{{ user_groups }}"
+      tags: groups
+
+    - name: Create system users
+      user:
+        name: "{{ item.username }}"
+        comment: "{{ item.full_name }}"
+        group: "{{ item.primary_group }}"
+        groups: "{{ item.secondary_groups | join(',') if item.secondary_groups else omit }}"
+        shell: "{{ item.shell }}"
+        create_home: "{{ item.create_home }}"
+        password: "{{ item.password }}"
+        state: present
+      loop: "{{ system_users }}"
+      tags: users
+
+    - name: Display created users information
+      debug:
+        msg: "User {{ item.username }} created with primary group {{ item.primary_group }}"
+      loop: "{{ system_users }}"
+      tags: info
+EOF
