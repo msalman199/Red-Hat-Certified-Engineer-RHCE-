@@ -1,0 +1,66 @@
+---
+- name: Advanced Idempotent Web Server Configuration
+  hosts: all
+  become: yes
+  vars:
+    web_port: 8080
+    document_root: /var/www/html
+    
+  tasks:
+    - name: Ensure httpd package is installed
+      package:
+        name: httpd
+        state: present
+      notify: restart httpd
+      
+    - name: Ensure custom web directory exists
+      file:
+        path: "{{ document_root }}/custom"
+        state: directory
+        owner: apache
+        group: apache
+        mode: '0755'
+      
+    - name: Create custom httpd configuration
+      template:
+        src: httpd-custom.conf.j2
+        dest: /etc/httpd/conf.d/custom.conf
+        backup: yes
+      notify: restart httpd
+      
+    - name: Ensure index.html exists with specific content
+      copy:
+        content: |
+          <html>
+          <head><title>Idempotent Web Server</title></head>
+          <body>
+          <h1>Welcome to Idempotent Configuration</h1>
+          <p>This server is configured using idempotent Ansible playbooks.</p>
+          <p>Port: {{ web_port }}</p>
+          </body>
+          </html>
+        dest: "{{ document_root }}/index.html"
+        owner: apache
+        group: apache
+        mode: '0644'
+      
+    - name: Ensure firewall allows HTTP traffic
+      firewalld:
+        service: http
+        permanent: yes
+        state: enabled
+        immediate: yes
+      when: ansible_facts['os_family'] == "RedHat"
+      
+    - name: Ensure httpd service is running and enabled
+      service:
+        name: httpd
+        state: started
+        enabled: yes
+        
+  handlers:
+    - name: restart httpd
+      service:
+        name: httpd
+        state: restarted
+      listen: restart httpd
