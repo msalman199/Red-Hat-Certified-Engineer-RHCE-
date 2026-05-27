@@ -1,0 +1,110 @@
+---
+- name: Performance Testing for Scaled Ansible Automation
+  hosts: all
+  gather_facts: yes
+  vars:
+    test_results_dir: "/tmp/ansible-performance"
+    concurrent_tasks: 10
+    
+  tasks:
+    - name: Create test results directory
+      file:
+        path: "{{ test_results_dir }}"
+        state: directory
+        mode: '0755'
+      delegate_to: localhost
+      run_once: true
+      tags: setup
+
+    - name: Record start time
+      set_fact:
+        test_start_time: "{{ ansible_date_time.epoch }}"
+      tags: timing
+
+    - name: System information gathering
+      setup:
+        gather_subset:
+          - hardware
+          - network
+          - virtual
+      register: system_facts
+      tags: facts
+
+    - name: CPU and Memory stress test
+      shell: |
+        # CPU test
+        timeout 30s yes > /dev/null &
+        CPU_PID=$!
+        
+        # Memory test  
+        timeout 30s dd if=/dev/zero of=/tmp/memory_test bs=1M count=100 2>/dev/null &
+        MEM_PID=$!
+        
+        # Wait for tests to complete
+        wait $CPU_PID 2>/dev/null
+        wait $MEM_PID 2>/dev/null
+        
+        # Cleanup
+        rm -f /tmp/memory_test
+        
+        echo "Stress test completed on {{ inventory_hostname }}"
+      register: stress_test_result
+      tags: stress
+
+    - name: Network connectivity test
+      uri:
+        url: "http://{{ item }}"
+        method: GET
+        timeout: 10
+      loop: "{{ groups['webservers'] }}"
+      when: inventory_hostname in groups['webservers']
+      register: network_test_result
+      ignore_errors: yes
+      tags: network
+
+    - name: Database connectivity test
+      mysql_query:
+        login_user: root
+        login_password: "SecurePass123!"
+        query: "SELECT 1 as test_connection"
+      when: inventory_hostname in groups['databases']
+      register: db_test_result
+      ignore_errors: yes
+      tags: database
+
+    - name: Disk I/O performance test
+      shell: |
+        # Write test
+        WRITE_START=$(date +%s.%N)
+        dd if=/dev/zero of=/tmp/io_test bs=1M count=50 oflag=direct 2>/dev/null
+        WRITE_END=$(date +%s.%N)
+        
+        # Read test
+        READ_START=$(date +%s.%N)
+        dd if=/tmp/io_test of=/dev/null bs=1M iflag=direct 2>/dev/null
+        READ_END=$(date +%s.%N)
+        
+        # Calculate performance
+        WRITE_TIME=$(echo "$WRITE_END - $WRITE_START" | bc)
+        READ_TIME=$(echo "$READ_END - $READ_START" | bc)
+        
+        # Cleanup
+        rm -f /tmp/io_test
+        
+        echo "Write time: ${WRITE_TIME}s, Read time: ${READ_TIME}s"
+      register: io_test_result
+      tags: io
+
+    - name: Record end time and calculate duration
+      set_fact:
+        test_end_time: "{{ ansible_date_time.epoch }}"
+        test_duration: "{{ ansible_date_time.epoch | int - test_start_time | int }}"
+      tags: timing
+
+    - name: Generate performance report
+      template:
+        src: performance-report.j2
+        dest: "{{ test_results_dir }}/{{ inventory_hostname }}-performance.json"
+      delegate_to: localhost
+      tags: report
+EOF
