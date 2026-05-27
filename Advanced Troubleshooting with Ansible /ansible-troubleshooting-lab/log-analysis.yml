@@ -1,0 +1,130 @@
+---
+- name: Advanced Log Analysis and Troubleshooting
+  hosts: all
+  become: yes
+  vars:
+    analysis_timeframe: "1 hour ago"
+    critical_keywords:
+      - "error"
+      - "failed"
+      - "critical"
+      - "emergency"
+      - "alert"
+      - "panic"
+    log_locations:
+      system: /var/log/messages
+      apache: /var/log/httpd/error_log
+      mysql: /var/log/mysqld.log
+      auth: /var/log/secure
+      
+  tasks:
+    - name: Create log analysis directory
+      file:
+        path: /tmp/log-analysis
+        state: directory
+        mode: '0755'
+        
+    - name: Analyze system logs for critical events
+      shell: |
+        since_time=$(date -d "{{ analysis_timeframe }}" "+%b %d %H:%M")
+        current_year=$(date "+%Y")
+        
+        echo "=== Critical Events Since {{ analysis_timeframe }} ===" > /tmp/log-analysis/critical-events.log
+        
+        for keyword in {{ critical_keywords | join(' ') }}; do
+          echo "--- Searching for: $keyword ---" >> /tmp/log-analysis/critical-events.log
+          awk -v year="$current_year" -v since="$since_time" '
+            BEGIN { 
+              cmd = "date -d \"" since "\" +%s"
+              cmd | getline since_epoch
+              close(cmd)
+            }
+            {
+              log_time = $1 " " $2 " " $3
+              cmd = "date -d \"" year " " log_time "\" +%s 2>/dev/null"
+              if ((cmd | getline log_epoch) > 0 && log_epoch >= since_epoch) {
+                if (tolower($0) ~ /'"$keyword"'/) print $0
+              }
+              close(cmd)
+            }
+          ' {{ log_locations.system }} >> /tmp/log-analysis/critical-events.log 2>/dev/null || echo "No entries found for $keyword" >> /tmp/log-analysis/critical-events.log
+        done
+      changed_when: false
+      
+    - name: Analyze Apache error patterns
+      shell: |
+        if [ -f "{{ log_locations.apache }}" ]; then
+          echo "=== Apache Error Analysis ===" > /tmp/log-analysis/apache-errors.log
+          echo "--- Error Frequency ---" >> /tmp/log-analysis/apache-errors.log
+          tail -1000 {{ log_locations.apache }} | awk '{print $1, $2, $3}' | sort | uniq -c | sort -nr | head -10 >> /tmp/log-analysis/apache-errors.log
+          
+          echo "--- Recent 404 Errors ---" >> /tmp/log-analysis/apache-errors.log
+          tail -500 {{ log_locations.apache }} | grep "404" | tail -10 >> /tmp/log-analysis/apache-errors.log
+          
+          echo "--- Recent 500 Errors ---" >> /tmp/log-analysis/apache-errors.log
+          tail -500 {{ log_locations.apache }} | grep "500" | tail -10 >> /tmp/log-analysis/apache-errors.log
+        else
+          echo "Apache error log not found" > /tmp/log-analysis/apache-errors.log
+        fi
+      changed_when: false
+      
+    - name: Analyze authentication failures
+      shell: |
+        if [ -f "{{ log_locations.auth }}" ]; then
+          echo "=== Authentication Analysis ===" > /tmp/log-analysis/auth-analysis.log
+          echo "--- Failed SSH Attempts ---" >> /tmp/log-analysis/auth-analysis.log
+          grep "Failed password" {{ log_locations.auth }} | tail -20 >> /tmp/log-analysis/auth-analysis.log
+          
+          echo "--- Successful Logins ---" >> /tmp/log-analysis/auth-analysis.log
+          grep "Accepted password" {{ log_locations.auth }} | tail -10 >> /tmp/log-analysis/auth-analysis.log
+          
+          echo "--- Failed Login Summary by IP ---" >> /tmp/log-analysis/auth-analysis.log
+          grep "Failed password" {{ log_locations.auth }} | awk '{print $(NF-3)}' | sort | uniq -c | sort -nr | head -10 >> /tmp/log-analysis/auth-analysis.log
+        else
+          echo "Auth log not found" > /tmp/log-analysis/auth-analysis.log
+        fi
+      changed_when: false
+      
+    - name: Generate comprehensive report
+      shell: |
+        echo "=== SYSTEM TROUBLESHOOTING REPORT ===" > /tmp/log-analysis/summary-report.log
+        echo "Generated: $(date)" >> /tmp/log-analysis/summary-report.log
+        echo "Host: $(hostname)" >> /tmp/log-analysis/summary-report.log
+        echo "Analysis Period: {{ analysis_timeframe }}" >> /tmp/log-analysis/summary-report.log
+        echo "" >> /tmp/log-analysis/summary-report.log
+        
+        echo "=== SYSTEM STATUS ===" >> /tmp/log-analysis/summary-report.log
+        systemctl list-units --failed --no-pager >> /tmp/log-analysis/summary-report.log
+        echo "" >> /tmp/log-analysis/summary-report.log
+        
+        echo "=== DISK USAGE ===" >> /tmp/log-analysis/summary-report.log
+        df -h >> /tmp/log-analysis/summary-report.log
+        echo "" >> /tmp/log-analysis/summary-report.log
+        
+        echo "=== MEMORY USAGE ===" >> /tmp/log-analysis/summary-report.log
+        free -h >> /tmp/log-analysis/summary-report.log
+        echo "" >> /tmp/log-analysis/summary-report.log
+        
+        echo "=== LOAD AVERAGE ===" >> /tmp/log-analysis/summary-report.log
+        uptime >> /tmp/log-analysis/summary-report.log
+        echo "" >> /tmp/log-analysis/summary-report.log
+        
+        # Append other analysis files
+        for file in /tmp/log-analysis/*.log; do
+          if [ "$file" != "/tmp/log-analysis/summary-report.log" ]; then
+            echo "" >> /tmp/log-analysis/summary-report.log
+            cat "$file" >> /tmp/log-analysis/summary-report.log
+          fi
+        done
+      changed_when: false
+      
+    - name: Fetch analysis results
+      fetch:
+        src: /tmp/log-analysis/summary-report.log
+        dest: ./reports/{{ inventory_hostname }}-troubleshooting-report.log
+        flat: yes
+      
+    - name: Display report location
+      debug:
+        msg: "Troubleshooting report saved to: ./reports/{{ inventory_hostname }}-troubleshooting-report.log"
+EOF
