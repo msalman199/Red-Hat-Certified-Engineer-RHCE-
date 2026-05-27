@@ -1,0 +1,55 @@
+---
+- name: Optimized User and Group Management
+  hosts: webservers
+  become: yes
+  gather_facts: yes
+  vars:
+    ansible_ssh_pipelining: true
+    
+  tasks:
+    - name: Ensure required packages are installed
+      package:
+        name:
+          - shadow-utils
+          - acl
+          - passwd
+        state: present
+      tags: packages
+
+    - name: Create groups in batch
+      group:
+        name: "{{ item.name }}"
+        gid: "{{ item.gid | default(omit) }}"
+        state: present
+      loop: "{{ user_groups }}"
+      register: group_creation
+      failed_when: false
+      tags: groups
+
+    - name: Report group creation results
+      debug:
+        msg: "Group {{ item.item.name }}: {{ 'Created' if item.changed else 'Already exists' }}"
+      loop: "{{ group_creation.results }}"
+      tags: groups
+
+    - name: Create users with error handling
+      user:
+        name: "{{ item.username }}"
+        comment: "{{ item.full_name }}"
+        group: "{{ item.primary_group }}"
+        groups: "{{ item.secondary_groups | join(',') if item.secondary_groups else omit }}"
+        shell: "{{ item.shell }}"
+        create_home: "{{ item.create_home }}"
+        password: "{{ item.password }}"
+        state: present
+      loop: "{{ system_users }}"
+      register: user_creation
+      failed_when: false
+      tags: users
+
+    - name: Report user creation results
+      debug:
+        msg: "User {{ item.item.username }}: {{ 'Created' if item.changed else 'Already exists' }}"
+      loop: "{{ user_creation.results }}"
+      tags: users
+EOF
