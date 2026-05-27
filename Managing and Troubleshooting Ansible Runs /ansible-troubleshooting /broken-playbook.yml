@@ -1,0 +1,49 @@
+---
+- name: Problematic Web Server Setup
+  hosts: webservers
+  become: yes
+  vars:
+    web_package: httpd
+    web_service: httpd
+    document_root: /var/www/html
+    
+  tasks:
+    - name: Install web server
+      yum:
+        name: "{{ web_package }}"
+        state: present
+        
+    - name: Start and enable web service
+      systemd:
+        name: "{{ wrong_service_name }}"
+        state: started
+        enabled: yes
+        
+    - name: Create index.html
+      copy:
+        content: "<h1>Welcome to {{ ansible_hostname }}</h1>"
+        dest: "{{ document_root }}/index.html"
+        owner: apache
+        group: apache
+        mode: '0644'
+        
+    - name: Configure firewall
+      firewalld:
+        service: http
+        permanent: yes
+        state: enabled
+        immediate: yes
+        
+    - name: Copy configuration file
+      copy:
+        src: /nonexistent/httpd.conf
+        dest: /etc/httpd/conf/httpd.conf
+        backup: yes
+      notify: restart web service
+      
+  handlers:
+    - name: restart web service
+      systemd:
+        name: "{{ web_service }}"
+        state: restarted
+EOF
