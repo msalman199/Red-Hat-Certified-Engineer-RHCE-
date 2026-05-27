@@ -1,0 +1,33 @@
+---
+- name: Error Handling Examples
+  hosts: webservers
+  become: yes
+  
+  tasks:
+    - name: Task that might fail
+      command: /bin/false
+      ignore_errors: yes
+      register: result
+      
+    - name: Show result of previous task
+      debug:
+        var: result
+        
+    - name: Task with error handling
+      block:
+        - name: Attempt to install non-existent package
+          yum:
+            name: non-existent-package
+            state: present
+      rescue:
+        - name: Handle the error
+          debug:
+            msg: "Package installation failed, continuing with alternative"
+        - name: Install alternative package
+          yum:
+            name: htop
+            state: present
+      always:
+        - name: This always runs
+          debug:
+            msg: "Cleanup or logging task"
