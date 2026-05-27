@@ -1,0 +1,32 @@
+---
+- name: Debugging Practice Playbook (Fixed)
+  hosts: webservers
+  become: yes
+  
+  tasks:
+    # Fixed: Correct indentation
+    - name: Install package with correct indentation
+      yum:
+        name: htop
+        state: present
+        
+    # Fixed: Added required path parameter
+    - name: Create directory with proper parameters
+      file:
+        path: /tmp/ansible-test
+        state: directory
+        mode: '0755'
+        
+    # Fixed: Removed invalid parameter and used existing source
+    - name: Copy file with valid parameters
+      copy:
+        content: "This is a test file created by Ansible"
+        dest: /tmp/test.txt
+        mode: '0644'
+        
+    # Fixed: Corrected template syntax
+    - name: Create file with proper template
+      copy:
+        content: "Hello {{ inventory_hostname }}!"
+        dest: /tmp/greeting.txt
+        mode: '0644'
