@@ -1,0 +1,70 @@
+---
+- name: Repository and GPG Key Management
+  hosts: all
+  become: yes
+  vars:
+    epel_gpg_key: "https://dl.fedoraproject.org/pub/epel/RPM-GPG-KEY-EPEL-8"
+    remi_gpg_key: "https://rpms.remirepo.net/RPM-GPG-KEY-remi"
+
+  tasks:
+    - name: Import EPEL GPG key
+      rpm_key:
+        key: "{{ epel_gpg_key }}"
+        state: present
+      when: ansible_os_family == "RedHat"
+
+    - name: Add EPEL repository
+      dnf:
+        name: epel-release
+        state: present
+      when: ansible_os_family == "RedHat"
+
+    - name: Add custom repository with GPG key
+      yum_repository:
+        name: custom-repo
+        description: Custom Repository for Lab
+        baseurl: https://example.com/repo/el$releasever/$basearch/
+        gpgcheck: yes
+        gpgkey: https://example.com/repo/RPM-GPG-KEY-custom
+        enabled: yes
+        state: present
+      ignore_errors: yes
+
+    - name: Import custom GPG key
+      rpm_key:
+        key: https://example.com/repo/RPM-GPG-KEY-custom
+        state: present
+      ignore_errors: yes
+
+    - name: Add Remi repository for PHP
+      yum_repository:
+        name: remi-php80
+        description: Remi's PHP 8.0 RPM repository
+        baseurl: https://rpms.remirepo.net/enterprise/8/php80/$basearch/
+        gpgcheck: yes
+        gpgkey: "{{ remi_gpg_key }}"
+        enabled: no
+        state: present
+
+    - name: Import Remi GPG key
+      rpm_key:
+        key: "{{ remi_gpg_key }}"
+        state: present
+
+    - name: List all repositories
+      command: dnf repolist all
+      register: repo_list
+      changed_when: false
+
+    - name: Display repository information
+      debug:
+        var: repo_list.stdout_lines
+
+    - name: Verify GPG keys are imported
+      command: rpm -q gpg-pubkey --qf '%{NAME}-%{VERSION}-%{RELEASE}\t%{SUMMARY}\n'
+      register: gpg_keys
+      changed_when: false
+
+    - name: Display imported GPG keys
+      debug:
+        var: gpg_keys.stdout_lines
