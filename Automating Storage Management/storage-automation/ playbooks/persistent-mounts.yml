@@ -1,0 +1,74 @@
+---
+- name: Configure Persistent Mounts
+  hosts: storage_servers
+  become: yes
+  vars:
+    volume_group_name: vg_data
+    logical_volumes:
+      - name: lv_web
+        mount_point: /var/www
+        filesystem: ext4
+        mount_options: defaults
+        dump: 1
+        passno: 2
+      - name: lv_logs
+        mount_point: /var/log/apps
+        filesystem: xfs
+        mount_options: defaults,noatime
+        dump: 1
+        passno: 2
+      - name: lv_backup
+        mount_point: /backup
+        filesystem: ext4
+        mount_options: defaults
+        dump: 1
+        passno: 2
+
+  tasks:
+    - name: Backup original fstab
+      copy:
+        src: /etc/fstab
+        dest: /etc/fstab.backup.{{ ansible_date_time.epoch }}
+        remote_src: yes
+
+    - name: Add logical volumes to fstab for persistent mounting
+      mount:
+        path: "{{ item.mount_point }}"
+        src: "/dev/{{ volume_group_name }}/{{ item.name }}"
+        fstype: "{{ item.filesystem }}"
+        opts: "{{ item.mount_options }}"
+        dump: "{{ item.dump }}"
+        passno: "{{ item.passno }}"
+        state: present
+      loop: "{{ logical_volumes }}"
+
+    - name: Test fstab configuration
+      command: mount -a
+      register: mount_test
+      changed_when: false
+
+    - name: Display fstab entries for verification
+      command: grep vg_data /etc/fstab
+      register: fstab_entries
+      changed_when: false
+
+    - name: Show fstab entries
+      debug:
+        msg: "{{ fstab_entries.stdout_lines }}"
+
+    - name: Create test files to verify write access
+      file:
+        path: "{{ item.mount_point }}/test_file_{{ item.name }}.txt"
+        state: touch
+        mode: '0644'
+      loop: "{{ logical_volumes }}"
+
+    - name: Verify write access by creating content
+      copy:
+        content: |
+          This is a test file created on {{ item.name }}
+          Mount point: {{ item.mount_point }}
+          Filesystem: {{ item.filesystem }}
+          Created: {{ ansible_date_time.iso8601 }}
+        dest: "{{ item.mount_point }}/test_file_{{ item.name }}.txt"
+      loop: "{{ logical_volumes }}"
