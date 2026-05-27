@@ -1,0 +1,53 @@
+---
+- name: Basic Package Management with Ansible
+  hosts: all
+  become: yes
+  vars:
+    packages_to_install:
+      - git
+      - wget
+      - curl
+      - vim
+    packages_to_remove:
+      - telnet
+      - rsh
+
+  tasks:
+    - name: Update package cache
+      dnf:
+        update_cache: yes
+      when: ansible_os_family == "RedHat"
+
+    - name: Install required packages
+      dnf:
+        name: "{{ packages_to_install }}"
+        state: present
+      register: install_result
+
+    - name: Display installation results
+      debug:
+        msg: "Packages installed: {{ install_result.results | map(attribute='name') | list }}"
+      when: install_result.changed
+
+    - name: Remove unwanted packages
+      dnf:
+        name: "{{ packages_to_remove }}"
+        state: absent
+      register: remove_result
+
+    - name: Display removal results
+      debug:
+        msg: "Packages removed: {{ remove_result.results | map(attribute='name') | list }}"
+      when: remove_result.changed
+
+    - name: Verify installed packages
+      command: rpm -q {{ item }}
+      loop: "{{ packages_to_install }}"
+      register: verify_install
+      failed_when: verify_install.rc != 0
+      changed_when: false
+
+    - name: Display verification results
+      debug:
+        msg: "{{ item.item }} is installed: {{ item.stdout }}"
+      loop: "{{ verify_install.results }}"
