@@ -1,0 +1,35 @@
+Package Management Report
+Generated: {{ report_date }}
+Host: {{ inventory_hostname }}
+
+=== SYSTEM INFORMATION ===
+OS Family: {{ ansible_os_family }}
+Distribution: {{ ansible_distribution }} {{ ansible_distribution_version }}
+Architecture: {{ ansible_architecture }}
+Available Memory: {{ ansible_memory_mb.real.free }} MB
+
+=== INSTALLED PACKAGES ===
+Security Packages:
+{% for result in installed_security %}
+  - {{ result.name | default('N/A') }}: {{ result.state | default('N/A') }}
+{% endfor %}
+
+Monitoring Packages:
+{% for result in installed_monitoring %}
+  - {{ result.name | default('N/A') }}: {{ result.state | default('N/A') }}
+{% endfor %}
+
+=== VERIFICATION RESULTS ===
+{% for result in verification_results %}
+Package: {{ result.item }}
+Status: {{ 'PASSED' if result.rc == 0 else 'WARNINGS' }}
+{% if result.stdout %}
+Output: {{ result.stdout }}
+{% endif %}
+{% endfor %}
+
+=== RECOMMENDATIONS ===
+- Regular security updates should be applied
+- Package integrity should be verified periodically
+- System resources should be monitored
+- Package installation logs should be reviewed regularly
