@@ -1,0 +1,53 @@
+---
+- name: Advanced Multi-Service Management
+  hosts: webservers
+  become: yes
+  vars:
+    services_to_manage:
+      - name: "{{ 'httpd' if ansible_os_family == 'RedHat' else 'apache2' }}"
+        state: started
+        enabled: yes
+        config_file: "{{ '/etc/httpd/conf/httpd.conf' if ansible_os_family == 'RedHat' else '/etc/apache2/apache2.conf' }}"
+      - name: "{{ 'crond' if ansible_os_family == 'RedHat' else 'cron' }}"
+        state: started
+        enabled: yes
+        config_file: /etc/crontab
+
+  tasks:
+    - name: Display services to be managed
+      debug:
+        msg: "Managing service: {{ item.name }}"
+      loop: "{{ services_to_manage }}"
+
+    - name: Ensure all required services are installed
+      package:
+        name: "{{ item.name }}"
+        state: present
+      loop: "{{ services_to_manage }}"
+      ignore_errors: yes
+
+    - name: Manage service states using systemd
+      systemd:
+        name: "{{ item.name }}"
+        state: "{{ item.state }}"
+        enabled: "{{ item.enabled }}"
+        daemon_reload: yes
+      loop: "{{ services_to_manage }}"
+      register: service_results
+
+    - name: Display service management results
+      debug:
+        msg: "Service {{ item.item.name }}: State={{ item.state }}, Changed={{ item.changed }}"
+      loop: "{{ service_results.results }}"
+
+    - name: Verify service status
+      systemd:
+        name: "{{ item.name }}"
+      loop: "{{ services_to_manage }}"
+      register: service_status
+
+    - name: Report service status
+      debug:
+        msg: "{{ item.item.name }} is {{ 'active' if item.status.ActiveState == 'active' else 'inactive' }}"
+      loop: "{{ service_status.results }}"
+EOF
