@@ -1,0 +1,133 @@
+---
+- name: Deploy Web Application Across Multiple Hosts
+  hosts: webservers
+  become: yes
+  vars:
+    app_name: "scalable-web-app"
+    app_version: "1.0.0"
+    web_root: "/var/www/html"
+    
+  tasks:
+    - name: Update system packages
+      yum:
+        name: "*"
+        state: latest
+        update_cache: yes
+      tags: system
+
+    - name: Install required packages
+      yum:
+        name:
+          - httpd
+          - php
+          - php-mysql
+          - git
+          - unzip
+        state: present
+      tags: packages
+
+    - name: Start and enable Apache service
+      systemd:
+        name: httpd
+        state: started
+        enabled: yes
+      tags: services
+
+    - name: Configure firewall for HTTP traffic
+      firewalld:
+        service: http
+        permanent: yes
+        state: enabled
+        immediate: yes
+      tags: firewall
+
+    - name: Create application directory
+      file:
+        path: "{{ web_root }}/{{ app_name }}"
+        state: directory
+        owner: apache
+        group: apache
+        mode: '0755'
+      tags: app
+
+    - name: Deploy application files
+      copy:
+        content: |
+          <!DOCTYPE html>
+          <html>
+          <head>
+              <title>{{ app_name }} - {{ inventory_hostname }}</title>
+              <style>
+                  body { font-family: Arial, sans-serif; margin: 40px; }
+                  .server-info { background: #f0f0f0; padding: 20px; border-radius: 5px; }
+              </style>
+          </head>
+          <body>
+              <h1>Welcome to {{ app_name }}</h1>
+              <div class="server-info">
+                  <h2>Server Information</h2>
+                  <p><strong>Hostname:</strong> {{ inventory_hostname }}</p>
+                  <p><strong>Version:</strong> {{ app_version }}</p>
+                  <p><strong>Deployed:</strong> {{ ansible_date_time.iso8601 }}</p>
+                  <p><strong>Environment:</strong> {{ environment | default('development') }}</p>
+              </div>
+              <?php
+              echo "<h2>PHP Information</h2>";
+              echo "<p>PHP Version: " . phpversion() . "</p>";
+              echo "<p>Server Time: " . date('Y-m-d H:i:s') . "</p>";
+              ?>
+          </body>
+          </html>
+        dest: "{{ web_root }}/{{ app_name }}/index.php"
+        owner: apache
+        group: apache
+        mode: '0644'
+      tags: app
+
+    - name: Create health check endpoint
+      copy:
+        content: |
+          <?php
+          header('Content-Type: application/json');
+          $health = array(
+              'status' => 'healthy',
+              'hostname' => gethostname(),
+              'timestamp' => date('c'),
+              'version' => '{{ app_version }}'
+          );
+          echo json_encode($health, JSON_PRETTY_PRINT);
+          ?>
+        dest: "{{ web_root }}/{{ app_name }}/health.php"
+        owner: apache
+        group: apache
+        mode: '0644'
+      tags: app
+
+    - name: Configure Apache virtual host
+      copy:
+        content: |
+          <VirtualHost *:80>
+              DocumentRoot {{ web_root }}/{{ app_name }}
+              ServerName {{ inventory_hostname }}
+              
+              <Directory {{ web_root }}/{{ app_name }}>
+                  AllowOverride All
+                  Require all granted
+              </Directory>
+              
+              ErrorLog /var/log/httpd/{{ app_name }}_error.log
+              CustomLog /var/log/httpd/{{ app_name }}_access.log combined
+          </VirtualHost>
+        dest: "/etc/httpd/conf.d/{{ app_name }}.conf"
+        owner: root
+        group: root
+        mode: '0644'
+      notify: restart apache
+      tags: config
+
+  handlers:
+    - name: restart apache
+      systemd:
+        name: httpd
+        state: restarted
+EOF
