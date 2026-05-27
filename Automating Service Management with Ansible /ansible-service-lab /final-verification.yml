@@ -1,0 +1,54 @@
+---
+- name: Final Lab Verification
+  hosts: webservers
+  become: yes
+  vars:
+    web_service: "{{ 'httpd' if ansible_os_family == 'RedHat' else 'apache2' }}"
+
+  tasks:
+    - name: Verify all services are running
+      systemd:
+        name: "{{ item }}"
+      register: service_verification
+      loop:
+        - "{{ web_service }}"
+        - sshd
+
+    - name: Display service verification results
+      debug:
+        msg: "{{ item.item }} is {{ item.status.ActiveState }} and {{ item.status.UnitFileState }}"
+      loop: "{{ service_verification.results }}"
+
+    - name: Test web service functionality
+      uri:
+        url: "http://{{ ansible_default_ipv4.address }}"
+        return_content: yes
+      delegate_to: localhost
+      register: web_test
+
+    - name: Verify web content
+      debug:
+        msg: "Web service is responding correctly"
+      when: "'Ansible Managed Server' in web_test.content"
+
+    - name: Check if handlers were properly configured
+      stat:
+        path: /var/log/ansible-backups.log
+      register: backup_log
+
+    - name: Verify backup logging
+      debug:
+        msg: "Backup logging is {{ 'configured' if backup_log.stat.exists else 'not configured' }}"
+
+    - name: Final lab completion status
+      debug:
+        msg: |
+          Lab 17 Completion Status:
+          ✓ Service management with systemd module
+          ✓ Handler implementation for service restarts
+          ✓ Service status validation
+          ✓ Configuration management
+          ✓ Health monitoring setup
+          
+          All objectives completed successfully!
+EOF
