@@ -1,0 +1,100 @@
+---
+- name: Package Management Best Practices
+  hosts: all
+  become: yes
+  vars:
+    security_packages:
+      - aide
+      - fail2ban
+      - firewalld
+    monitoring_packages:
+      - htop
+      - iotop
+      - nethogs
+      - tcpdump
+
+  tasks:
+    - name: Create package management log directory
+      file:
+        path: /var/log/ansible-package-management
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Check system resources before package operations
+      setup:
+        filter: ansible_memory_mb
+      register: system_memory
+
+    - name: Verify sufficient disk space
+      setup:
+        filter: ansible_mounts
+      register: disk_info
+
+    - name: Display system resources
+      debug:
+        msg: |
+          Available Memory: {{ ansible_memory_mb.real.free }} MB
+          Root Partition Free: {{ (ansible_mounts | selectattr('mount', 'equalto', '/') | first).size_available | human_readable }}
+
+    - name: Create package backup before major changes
+      command: rpm -qa --qf "%{NAME}-%{VERSION}-%{RELEASE}.%{ARCH}\n"
+      register: installed_packages
+      changed_when: false
+
+    - name: Save package list to file
+      copy:
+        content: "{{ installed_packages.stdout }}"
+        dest: "/var/log/ansible-package-management/packages-{{ ansible_date_time.epoch }}.txt"
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Install security packages with verification
+      dnf:
+        name: "{{ security_packages }}"
+        state: present
+        validate_certs: yes
+      register: security_install
+
+    - name: Install monitoring packages
+      dnf:
+        name: "{{ monitoring_packages }}"
+        state: present
+      register: monitoring_install
+
+    - name: Verify package integrity after installation
+      command: rpm -V {{ item }}
+      loop: "{{ security_packages + monitoring_packages }}"
+      register: package_verification
+      failed_when: package_verification.rc not in [0, 1]
+      changed_when: false
+
+    - name: Display verification results
+      debug:
+        msg: "Package {{ item.item }} verification: {{ 'PASSED' if item.rc == 0 else 'WARNINGS' }}"
+      loop: "{{ package_verification.results }}"
+
+    - name: Check for available security updates
+      dnf:
+        list: updates
+        security: yes
+      register: security_updates
+
+    - name: Display available security updates
+      debug:
+        msg: "Security updates available: {{ security_updates.results | length }}"
+
+    - name: Create package management report
+      template:
+        src: package-report.j2
+        dest: "/var/log/ansible-package-management/report-{{ ansible_date_time.date }}.txt"
+        owner: root
+        group: root
+        mode: '0644'
+      vars:
+        report_date: "{{ ansible_date_time.iso8601 }}"
+        installed_security: "{{ security_install.results | default([]) }}"
+        installed_monitoring: "{{ monitoring_install.results | default([]) }}"
+        verification_results: "{{ package_verification.results | default([]) }}"
