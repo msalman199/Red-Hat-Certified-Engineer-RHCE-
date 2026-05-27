@@ -1,0 +1,30 @@
+---
+- name: Verify Service Status
+  hosts: webservers
+  become: yes
+  
+  tasks:
+    - name: Check httpd service status
+      systemd:
+        name: httpd
+      register: httpd_status
+    
+    - name: Display httpd service information
+      debug:
+        msg: |
+          Service: httpd
+          Active: {{ httpd_status.status.ActiveState }}
+          Enabled: {{ httpd_status.status.UnitFileState }}
+          Main PID: {{ httpd_status.status.MainPID }}
+    
+    - name: Check if httpd is listening on port 80
+      wait_for:
+        port: 80
+        host: "{{ ansible_default_ipv4.address }}"
+        timeout: 10
+      register: port_check
+      ignore_errors: yes
+    
+    - name: Display port status
+      debug:
+        msg: "HTTP port 80 is {{ 'accessible' if port_check is succeeded else 'not accessible' }}"
