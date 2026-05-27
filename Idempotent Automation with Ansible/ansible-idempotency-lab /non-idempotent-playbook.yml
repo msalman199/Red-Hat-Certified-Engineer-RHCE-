@@ -1,0 +1,16 @@
+---
+- name: Non-Idempotent Configuration Example
+  hosts: all
+  become: yes
+  tasks:
+    - name: Add a line to /etc/hosts (NON-IDEMPOTENT)
+      shell: echo "192.168.1.100 custom-server" >> /etc/hosts
+      
+    - name: Create a user with shell command (NON-IDEMPOTENT)
+      shell: useradd -m testuser
+      
+    - name: Install package using shell (NON-IDEMPOTENT)
+      shell: yum install -y wget
+      
+    - name: Start a service using shell (NON-IDEMPOTENT)
+      shell: systemctl start httpd
