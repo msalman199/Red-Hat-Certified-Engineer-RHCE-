@@ -1,0 +1,53 @@
+---
+- name: Advanced Apache Configuration
+  hosts: webservers
+  become: yes
+  vars:
+    apache_port: 8080
+    custom_config_dir: /etc/httpd/conf.d
+    
+  tasks:
+    - name: Create custom Apache configuration
+      copy:
+        content: |
+          # Custom Apache Configuration
+          Listen {{ apache_port }}
+          
+          <VirtualHost *:{{ apache_port }}>
+              ServerName {{ inventory_hostname }}
+              DocumentRoot /var/www/html
+              ErrorLog logs/custom_error.log
+              CustomLog logs/custom_access.log combined
+          </VirtualHost>
+        dest: "{{ custom_config_dir }}/custom.conf"
+        backup: yes
+      notify: restart apache
+      
+    - name: Update main Apache configuration
+      lineinfile:
+        path: /etc/httpd/conf/httpd.conf
+        regexp: '^Listen 80'
+        line: 'Listen 80'
+        backup: yes
+      notify: restart apache
+      
+    - name: Create log directory
+      file:
+        path: /var/log/httpd/custom
+        state: directory
+        owner: apache
+        group: apache
+        mode: '0755'
+        
+    - name: Install additional packages
+      yum:
+        name:
+          - mod_ssl
+          - httpd-tools
+        state: present
+        
+  handlers:
+    - name: restart apache
+      systemd:
+        name: httpd
+        state: restarted
