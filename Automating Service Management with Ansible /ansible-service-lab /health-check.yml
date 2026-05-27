@@ -1,0 +1,82 @@
+---
+- name: Service Health Check and Configuration Validation
+  hosts: webservers
+  become: yes
+  vars:
+    web_service: "{{ 'httpd' if ansible_os_family == 'RedHat' else 'apache2' }}"
+    config_file: "{{ '/etc/httpd/conf/httpd.conf' if ansible_os_family == 'RedHat' else '/etc/apache2/apache2.conf' }}"
+
+  tasks:
+    - name: Test web server configuration syntax
+      command: "{{ 'httpd -t' if ansible_os_family == 'RedHat' else 'apache2ctl configtest' }}"
+      register: config_test
+      failed_when: config_test.rc != 0
+
+    - name: Display configuration test results
+      debug:
+        msg: "Configuration test: {{ 'PASSED' if config_test.rc == 0 else 'FAILED' }}"
+
+    - name: Check service memory usage
+      shell: |
+        ps aux | grep {{ web_service }} | grep -v grep | awk '{sum+=$6} END {print sum/1024 " MB"}'
+      register: memory_usage
+
+    - name: Display memory usage
+      debug:
+        msg: "{{ web_service }} memory usage: {{ memory_usage.stdout }}"
+
+    - name: Check service uptime
+      shell: |
+        systemctl show {{ web_service }} --property=ActiveEnterTimestamp | cut -d= -f2
+      register: service_uptime
+
+    - name: Display service uptime
+      debug:
+        msg: "{{ web_service }} started at: {{ service_uptime.stdout }}"
+
+    - name: Validate critical configuration parameters
+      lineinfile:
+        path: "{{ config_file }}"
+        regexp: "{{ item.regexp }}"
+        line: "{{ item.line }}"
+        state: present
+      check_mode: yes
+      register: config_validation
+      loop:
+        - { regexp: '^ServerTokens', line: 'ServerTokens Prod' }
+        - { regexp: '^ServerSignature', line: 'ServerSignature Off' }
+
+    - name: Report configuration validation
+      debug:
+        msg: "Configuration check for '{{ item.item.line }}': {{ 'OK' if not item.changed else 'NEEDS UPDATE' }}"
+      loop: "{{ config_validation.results }}"
+
+    - name: Create service health report
+      copy:
+        content: |
+          Service Health Report for {{ inventory_hostname }}
+          Generated: {{ ansible_date_time.iso8601 }}
+          
+          Service: {{ web_service }}
+          Status: {{ ansible_facts.services[web_service].state | default('unknown') }}
+          Configuration Test: {{ 'PASSED' if config_test.rc == 0 else 'FAILED' }}
+          Memory Usage: {{ memory_usage.stdout }}
+          Started: {{ service_uptime.stdout }}
+          
+          Port Connectivity:
+          - Port 80: {{ 'OPEN' if web_response is defined and web_response.status == 200 else 'CLOSED' }}
+          - Port 22: OPEN (SSH)
+          
+          Configuration Status:
+          {% for item in config_validation.results %}
+          - {{ item.item.line }}: {{ 'OK' if not item.changed else 'NEEDS UPDATE' }}
+          {% endfor %}
+        dest: "/tmp/service-health-{{ inventory_hostname }}.txt"
+        mode: '0644'
+
+    - name: Fetch health reports to control node
+      fetch:
+        src: "/tmp/service-health-{{ inventory_hostname }}.txt"
+        dest: "./health-reports/"
+        flat: yes
+EOF
