@@ -1,0 +1,126 @@
+---
+- name: Complex Web Application Deployment
+  hosts: web_servers
+  become: yes
+  vars:
+    app_name: "mywebapp"
+    app_version: "2.1.0"
+    web_port: 8080
+    db_host: "{{ hostvars['db1']['ansible_default_ipv4']['address'] }}"
+    
+  tasks:
+    - name: Install required packages
+      yum:
+        name:
+          - httpd
+          - php
+          - php-mysql
+          - wget
+          - unzip
+        state: present
+      tags: packages
+      
+    - name: Create application directory
+      file:
+        path: "/opt/{{ app_name }}"
+        state: directory
+        owner: apache
+        group: apache
+        mode: '0755'
+      tags: directories
+      
+    - name: Download application source
+      get_url:
+        url: "https://github.com/example/{{ app_name }}/archive/v{{ app_version }}.zip"
+        dest: "/tmp/{{ app_name }}-{{ app_version }}.zip"
+        timeout: 30
+      tags: download
+      
+    - name: Extract application
+      unarchive:
+        src: "/tmp/{{ app_name }}-{{ app_version }}.zip"
+        dest: "/opt/{{ app_name }}"
+        remote_src: yes
+        owner: apache
+        group: apache
+      tags: extract
+      
+    - name: Configure Apache virtual host
+      template:
+        src: vhost.conf.j2
+        dest: "/etc/httpd/conf.d/{{ app_name }}.conf"
+        backup: yes
+      notify: restart apache
+      tags: configuration
+      
+    - name: Start and enable Apache
+      systemd:
+        name: httpd
+        state: started
+        enabled: yes
+      tags: services
+      
+    - name: Configure firewall
+      firewalld:
+        port: "{{ web_port }}/tcp"
+        permanent: yes
+        state: enabled
+        immediate: yes
+      tags: firewall
+      
+  handlers:
+    - name: restart apache
+      systemd:
+        name: httpd
+        state: restarted
+
+- name: Database Server Configuration
+  hosts: db_servers
+  become: yes
+  vars:
+    mysql_root_password: "SecurePass123!"
+    app_db_name: "webapp_db"
+    app_db_user: "webapp_user"
+    app_db_password: "WebApp456!"
+    
+  tasks:
+    - name: Install MySQL server
+      yum:
+        name:
+          - mysql-server
+          - python3-PyMySQL
+        state: present
+      tags: database
+      
+    - name: Start and enable MySQL
+      systemd:
+        name: mysqld
+        state: started
+        enabled: yes
+      tags: database
+      
+    - name: Set MySQL root password
+      mysql_user:
+        name: root
+        password: "{{ mysql_root_password }}"
+        login_unix_socket: /var/lib/mysql/mysql.sock
+      tags: database
+      
+    - name: Create application database
+      mysql_db:
+        name: "{{ app_db_name }}"
+        state: present
+        login_user: root
+        login_password: "{{ mysql_root_password }}"
+      tags: database
+      
+    - name: Create application user
+      mysql_user:
+        name: "{{ app_db_user }}"
+        password: "{{ app_db_password }}"
+        priv: "{{ app_db_name }}.*:ALL"
+        state: present
+        login_user: root
+        login_password: "{{ mysql_root_password }}"
+      tags: database
+EOF
