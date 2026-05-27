@@ -1,0 +1,54 @@
+---
+- name: Conditional Deployment with Check Mode Support
+  hosts: web_servers
+  become: yes
+  vars:
+    deployment_mode: "{{ ansible_check_mode | ternary('check', 'deploy') }}"
+    
+  tasks:
+    - name: Display deployment mode
+      debug:
+        msg: "Running in {{ deployment_mode }} mode"
+        
+    - name: Check if application already exists
+      stat:
+        path: "/opt/{{ app_name }}"
+      register: app_exists
+      
+    - name: Determine deployment action
+      set_fact:
+        deployment_action: "{{ 'upgrade' if app_exists.stat.exists else 'install' }}"
+        
+    - name: Display deployment action
+      debug:
+        msg: "Will perform {{ deployment_action }} of {{ app_name }}"
+        
+    - name: Backup existing application (if upgrading)
+      archive:
+        path: "/opt/{{ app_name }}"
+        dest: "/opt/{{ app_name }}-backup-{{ ansible_date_time.epoch }}.tar.gz"
+      when: 
+        - deployment_action == "upgrade"
+        - not ansible_check_mode
+        
+    - name: Simulate backup in check mode
+      debug:
+        msg: "Would create backup: /opt/{{ app_name }}-backup-{{ ansible_date_time.epoch }}.tar.gz"
+      when:
+        - deployment_action == "upgrade"
+        - ansible_check_mode
+        
+    - name: Install packages (check mode aware)
+      yum:
+        name:
+          - httpd
+          - php
+          - php-mysql
+        state: present
+      register: package_install
+      
+    - name: Display package installation results
+      debug:
+        msg: "Packages {{ 'would be' if ansible_check_mode else 'were' }} installed: {{ package_install.results | map(attribute='name') | list }}"
+      when: package_install.results is defined
+EOF
