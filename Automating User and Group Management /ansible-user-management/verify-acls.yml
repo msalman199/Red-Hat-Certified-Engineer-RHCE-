@@ -1,0 +1,53 @@
+---
+- name: Verify ACL Configurations
+  hosts: webservers
+  become: yes
+  vars:
+    paths_to_check:
+      - /opt/projects/web-app
+      - /opt/projects/testing
+      - /opt/projects/admin
+      - /opt/shared-workspace
+
+  tasks:
+    - name: Check ACL permissions on directories
+      shell: getfacl {{ item }}
+      register: acl_output
+      loop: "{{ paths_to_check }}"
+      tags: verify_acls
+
+    - name: Display ACL information
+      debug:
+        msg: |
+          ACL for {{ item.item }}:
+          {{ item.stdout }}
+      loop: "{{ acl_output.results }}"
+      tags: verify_acls
+
+    - name: Test file creation with ACLs
+      file:
+        path: "{{ item }}/test-acl-file.txt"
+        state: touch
+        owner: alice
+        group: developers
+      loop:
+        - /opt/projects/web-app
+        - /opt/shared-workspace
+      tags: test_acls
+
+    - name: Verify effective permissions
+      shell: |
+        echo "Testing access for user alice to {{ item }}:"
+        sudo -u alice test -r {{ item }} && echo "Read: OK" || echo "Read: DENIED"
+        sudo -u alice test -w {{ item }} && echo "Write: OK" || echo "Write: DENIED"
+        sudo -u alice test -x {{ item }} && echo "Execute: OK" || echo "Execute: DENIED"
+      register: permission_test
+      loop: "{{ paths_to_check }}"
+      tags: test_permissions
+
+    - name: Display permission test results
+      debug:
+        msg: "{{ item.stdout_lines }}"
+      loop: "{{ permission_test.results }}"
+      tags: test_permissions
+EOF
