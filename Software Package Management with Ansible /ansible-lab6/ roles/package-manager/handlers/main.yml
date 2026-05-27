@@ -1,0 +1,54 @@
+---
+- name: update package cache
+  dnf:
+    update_cache: yes
+EOF
+Step 5: Create a playbook using the role
+
+cat > playbooks/role-based-package-management.yml << 'EOF'
+---
+- name: Package Management Using Roles
+  hosts: webservers
+  become: yes
+  vars:
+    role_packages:
+      - httpd
+      - mod_ssl
+      - php
+      - php-mysql
+    custom_repositories:
+      - name: "nginx-stable"
+        description: "nginx stable repo"
+        baseurl: "http://nginx.org/packages/centos/$releasever/$basearch/"
+        gpgkey: "https://nginx.org/keys/nginx_signing.key"
+        gpgcheck: true
+        enabled: false
+
+  roles:
+    - package-manager
+
+  post_tasks:
+    - name: Start and enable web services
+      systemd:
+        name: httpd
+        state: started
+        enabled: yes
+
+- name: Package Management for Database Servers
+  hosts: databases
+  become: yes
+  vars:
+    role_packages:
+      - mariadb-server
+      - mariadb
+      - python3-PyMySQL
+
+  roles:
+    - package-manager
+
+  post_tasks:
+    - name: Start and enable database service
+      systemd:
+        name: mariadb
+        state: started
+        enabled: yes
