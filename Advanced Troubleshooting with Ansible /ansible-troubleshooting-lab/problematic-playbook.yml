@@ -1,0 +1,49 @@
+---
+- name: Problematic Playbook for Troubleshooting Practice
+  hosts: web_servers
+  become: yes
+  vars:
+    # Intentional issues for learning
+    app_name: "{{ undefined_variable }}"  # Issue 1: Undefined variable
+    web_port: "eight-zero-eight-zero"     # Issue 2: Wrong data type
+    
+  tasks:
+    - name: Install packages with typo
+      yum:
+        name:
+          - httpd
+          - php
+          - php-mysqll  # Issue 3: Package name typo
+        state: present
+        
+    - name: Create directory with wrong permissions
+      file:
+        path: "/opt/{{ app_name }}"
+        state: directory
+        owner: nonexistent_user  # Issue 4: Non-existent user
+        group: apache
+        mode: '0755'
+        
+    - name: Download from invalid URL
+      get_url:
+        url: "https://invalid-domain-12345.com/app.zip"  # Issue 5: Invalid URL
+        dest: "/tmp/app.zip"
+        timeout: 5
+        
+    - name: Use incorrect module syntax
+      template:
+        source: vhost.conf.j2  # Issue 6: Wrong parameter name (should be 'src')
+        dest: "/etc/httpd/conf.d/app.conf"
+        
+    - name: Reference non-existent handler
+      systemd:
+        name: httpd
+        state: started
+      notify: restart_apache_server  # Issue 7: Handler name mismatch
+      
+  handlers:
+    - name: restart apache
+      systemd:
+        name: httpd
+        state: restarted
+EOF
