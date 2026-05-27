@@ -1,0 +1,48 @@
+---
+- name: Advanced Check Mode Demo
+  hosts: webservers
+  become: yes
+  
+  tasks:
+    - name: Install Apache (always runs in check mode)
+      yum:
+        name: httpd
+        state: present
+      check_mode: no
+      tags: install
+        
+    - name: Check if Apache is installed
+      command: rpm -q httpd
+      register: apache_check
+      failed_when: false
+      changed_when: false
+      check_mode: no
+      
+    - name: Display Apache installation status
+      debug:
+        msg: "Apache installation status: {{ apache_check.rc }}"
+        
+    - name: Start Apache (skip in check mode)
+      systemd:
+        name: httpd
+        state: started
+        enabled: yes
+      when: apache_check.rc == 0
+      tags: service
+      
+    - name: Create web content
+      copy:
+        content: |
+          <html>
+          <head><title>Check Mode Demo</title></head>
+          <body>
+          <h1>Server: {{ ansible_hostname }}</h1>
+          <p>Generated on: {{ ansible_date_time.iso8601 }}</p>
+          </body>
+          </html>
+        dest: /var/www/html/index.html
+        owner: apache
+        group: apache
+        mode: '0644'
+      tags: content
+EOF
