@@ -1,0 +1,41 @@
+SYSTEM VALIDATION REPORT
+========================
+Generated: {{ validation_timestamp }}
+
+SYSTEM INFORMATION
+------------------
+Hostname: {{ system_info.hostname }}
+IP Address: {{ system_info.ip_address }}
+Operating System: {{ system_info.os }}
+Kernel Version: {{ system_info.kernel }}
+Architecture: {{ system_info.architecture }}
+Total Memory: {{ system_info.memory_total }}
+Memory Usage: {{ system_info.memory_usage }}
+CPU Cores: {{ system_info.cpu_count }}
+System Uptime: {{ system_info.uptime }}
+
+VALIDATION RESULTS
+------------------
+{% if ansible_facts.services['firewalld.service'] is defined %}
+Firewall Status: {{ ansible_facts.services['firewalld.service'].state }}
+{% endif %}
+
+{% if selinux_status is defined %}
+SELinux Status: {{ selinux_status.stdout }}
+{% endif %}
+
+INSTALLED PACKAGES: {{ ansible_facts.packages | length }}
+RUNNING SERVICES: {{ ansible_facts.services | selectattr('value.state', 'equalto', 'running') | list | length }}
+
+NETWORK INTERFACES
+------------------
+{% for interface in ansible_interfaces %}
+{{ interface }}: {{ ansible_facts[interface]['ipv4']['address'] | default('No IP') }}
+{% endfor %}
+
+MOUNT POINTS
+------------
+{% for mount in ansible_mounts %}
+{{ mount.mount }}: {{ (mount.size_available / 1024 / 1024 / 1024) | round(2) }}GB available
+{% endfor %}
+EOF
