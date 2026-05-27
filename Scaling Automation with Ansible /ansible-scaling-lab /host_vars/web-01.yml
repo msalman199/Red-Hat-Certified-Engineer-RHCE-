@@ -1,0 +1,5 @@
+---
+server_role: primary_web
+load_balancer_weight: 100
+maintenance_window: "02:00-04:00"
+EOF
