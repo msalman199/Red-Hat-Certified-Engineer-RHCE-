@@ -1,0 +1,24 @@
+---
+- name: Setup Services for Management Lab
+  hosts: webservers
+  become: yes
+  tasks:
+    - name: Install Apache HTTP Server
+      yum:
+        name: httpd
+        state: present
+      when: ansible_os_family == "RedHat"
+
+    - name: Install Apache HTTP Server (Ubuntu/Debian)
+      apt:
+        name: apache2
+        state: present
+        update_cache: yes
+      when: ansible_os_family == "Debian"
+
+    - name: Create custom web content directory
+      file:
+        path: /var/www/html/custom
+        state: directory
+        mode: '0755'
+EOF
