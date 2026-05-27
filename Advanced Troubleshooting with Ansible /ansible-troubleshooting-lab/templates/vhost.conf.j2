@@ -1,0 +1,20 @@
+cat > templates/vhost.conf.j2 << 'EOF'
+<VirtualHost *:{{ web_port }}>
+    ServerName {{ inventory_hostname }}
+    DocumentRoot /opt/{{ app_name }}/public
+    
+    <Directory /opt/{{ app_name }}/public>
+        AllowOverride All
+        Require all granted
+    </Directory>
+    
+    ErrorLog /var/log/httpd/{{ app_name }}_error.log
+    CustomLog /var/log/httpd/{{ app_name }}_access.log combined
+    
+    # Database connection settings
+    SetEnv DB_HOST {{ db_host }}
+    SetEnv DB_NAME {{ app_db_name }}
+    SetEnv DB_USER {{ app_db_user }}
+    SetEnv DB_PASS {{ app_db_password }}
+</VirtualHost>
+EOF
