@@ -1,0 +1,85 @@
+---
+- name: Setup Real-time Log Monitoring
+  hosts: all
+  become: yes
+  tasks:
+    - name: Install log monitoring tools
+      yum:
+        name:
+          - rsyslog
+          - logrotate
+          - multitail
+        state: present
+        
+    - name: Configure rsyslog for centralized logging
+      blockinfile:
+        path: /etc/rsyslog.conf
+        block: |
+          # Custom log monitoring rules
+          *.emerg                                                 /var/log/emergency.log
+          *.alert                                                 /var/log/alerts.log
+          *.crit                                                  /var/log/critical.log
+          
+          # Application specific logging
+          local0.*                                                /var/log/applications.log
+          local1.*                                                /var/log/custom-app.log
+        marker: "# {mark} ANSIBLE MANAGED BLOCK - Log Monitoring"
+      notify: restart rsyslog
+      
+    - name: Create monitoring script
+      copy:
+        content: |
+          #!/bin/bash
+          # Real-time log monitoring script
+          
+          LOG_DIR="/var/log"
+          ALERT_EMAIL="admin@example.com"
+          
+          monitor_logs() {
+              echo "Starting real-time log monitoring..."
+              echo "Monitoring directory: $LOG_DIR"
+              echo "Press Ctrl+C to stop"
+              
+              # Monitor multiple log files simultaneously
+              multitail \
+                  -i "$LOG_DIR/messages" \
+                  -i "$LOG_DIR/secure" \
+                  -i "$LOG_DIR/httpd/error_log" \
+                  -i "$LOG_DIR/mysqld.log" \
+                  2>/dev/null
+          }
+          
+          check_critical_errors() {
+              # Check for critical errors in the last 5 minutes
+              find $LOG_DIR -name "*.log" -mmin -5 -exec grep -l -i "critical\|emergency\|panic" {} \; 2>/dev/null
+          }
+          
+          case "$1" in
+              monitor)
+                  monitor_logs
+                  ;;
+              check)
+                  check_critical_errors
+                  ;;
+              *)
+                  echo "Usage: $0 {monitor|check}"
+                  echo "  monitor - Start real-time log monitoring"
+                  echo "  check   - Check for recent critical errors"
+                  exit 1
+                  ;;
+          esac
+        dest: /usr/local/bin/log-monitor.sh
+        mode: '0755'
+        
+    - name: Create log analysis cron job
+      cron:
+        name: "Critical log check"
+        minute: "*/15"
+        job: "/usr/local/bin/log-monitor.sh check > /tmp/critical-check.log 2>&1"
+        
+  handlers:
+    - name: restart rsyslog
+      systemd:
+        name: rsyslog
+        state: restarted
+EOF
