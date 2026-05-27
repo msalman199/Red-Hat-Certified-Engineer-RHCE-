@@ -1,0 +1,17 @@
+[Unit]
+Description=My Application v{{ app_version }}
+After=network.target
+
+[Service]
+Type=forking
+User=appuser
+Group=appuser
+WorkingDirectory=/opt/app-{{ app_version }}
+ExecStart=/opt/app-{{ app_version }}/bin/app --daemon
+ExecReload=/bin/kill -HUP $MAINPID
+PIDFile=/var/run/myapp.pid
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
