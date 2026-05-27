@@ -1,0 +1,144 @@
+---
+- name: Advanced Service Management with Handlers
+  hosts: webservers
+  become: yes
+  vars:
+    config_timestamp: "{{ ansible_date_time.epoch }}"
+  
+  handlers:
+    - name: restart apache service
+      systemd:
+        name: httpd
+        state: restarted
+      listen: "apache restart"
+    
+    - name: reload apache configuration
+      systemd:
+        name: httpd
+        state: reloaded
+      listen: "apache reload"
+    
+    - name: validate apache configuration
+      command: httpd -t
+      listen: "apache restart"
+      listen: "apache reload"
+    
+    - name: restart firewall service
+      systemd:
+        name: firewalld
+        state: restarted
+      listen: "firewall restart"
+  
+  tasks:
+    - name: Install required packages
+      yum:
+        name:
+          - httpd
+          - mod_ssl
+        state: present
+    
+    - name: Create SSL configuration directory
+      file:
+        path: /etc/httpd/conf.d/ssl
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+    
+    - name: Configure SSL settings
+      copy:
+        content: |
+          # SSL Configuration
+          LoadModule ssl_module modules/mod_ssl.so
+          
+          <IfModule mod_ssl.c>
+              SSLEngine on
+              SSLProtocol all -SSLv2 -SSLv3
+              SSLCipherSuite HIGH:MEDIUM:!aNULL:!MD5:!SEED:!IDEA
+              SSLHonorCipherOrder on
+          </IfModule>
+        dest: /etc/httpd/conf.d/ssl/ssl-security.conf
+        owner: root
+        group: root
+        mode: '0644'
+      notify: "apache reload"
+    
+    - name: Update Apache security configuration
+      blockinfile:
+        path: /etc/httpd/conf/httpd.conf
+        block: |
+          # Security Configuration - Managed by Ansible
+          ServerTokens Prod
+          ServerSignature Off
+          
+          # Hide .htaccess files
+          <Files ".ht*">
+              Require all denied
+          </Files>
+          
+          # Prevent access to version control directories
+          <DirectoryMatch "/\.git">
+              Require all denied
+          </DirectoryMatch>
+        marker: "# {mark} ANSIBLE MANAGED SECURITY BLOCK"
+        backup: yes
+      notify: "apache restart"
+    
+    - name: Configure custom error pages
+      copy:
+        content: |
+          <!DOCTYPE html>
+          <html>
+          <head>
+              <title>Error 404 - Page Not Found</title>
+              <style>
+                  body { font-family: Arial, sans-serif; text-align: center; margin-top: 50px; }
+                  .error { color: #e74c3c; }
+              </style>
+          </head>
+          <body>
+              <h1 class="error">404 - Page Not Found</h1>
+              <p>The requested page could not be found on {{ inventory_hostname }}</p>
+              <p><a href="/">Return to Home Page</a></p>
+          </body>
+          </html>
+        dest: /var/www/html/404.html
+        owner: apache
+        group: apache
+        mode: '0644'
+    
+    - name: Configure custom error page directive
+      lineinfile:
+        path: /etc/httpd/conf/httpd.conf
+        line: 'ErrorDocument 404 /404.html'
+        backup: yes
+      notify: "apache reload"
+    
+    - name: Configure firewall for HTTPS
+      firewalld:
+        service: https
+        permanent: yes
+        state: enabled
+        immediate: yes
+      notify: "firewall restart"
+    
+    - name: Ensure services are running
+      systemd:
+        name: "{{ item }}"
+        state: started
+        enabled: yes
+      loop:
+        - httpd
+        - firewalld
+    
+    - name: Force handler execution for demonstration
+      meta: flush_handlers
+    
+    - name: Verify Apache configuration is valid
+      command: httpd -t
+      register: apache_config_test
+      changed_when: false
+    
+    - name: Display configuration test results
+      debug:
+        msg: "Apache configuration test: {{ apache_config_test.stderr }}"
