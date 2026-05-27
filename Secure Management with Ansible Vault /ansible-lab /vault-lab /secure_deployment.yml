@@ -1,0 +1,46 @@
+---
+- name: Secure Application Deployment
+  hosts: localhost
+  vars_files:
+    - db_secrets.yml
+  vars:
+    app_name: "secure-web-app"
+    deployment_env: "production"
+  
+  tasks:
+    - name: Display deployment information (non-sensitive)
+      debug:
+        msg: |
+          Deploying {{ app_name }} to {{ deployment_env }} environment
+          Database Host: {{ db_host }}
+          Database Port: {{ db_port }}
+          Database Name: {{ db_name }}
+    
+    - name: Create application configuration file
+      copy:
+        content: |
+          [database]
+          host={{ db_host }}
+          port={{ db_port }}
+          username={{ db_username }}
+          password={{ db_password }}
+          database={{ db_name }}
+          
+          [api]
+          key={{ api_key }}
+          token={{ secret_token }}
+          
+          [ssl]
+          cert_path={{ ssl_cert_path }}
+          key_path={{ ssl_key_path }}
+        dest: /tmp/app_config.ini
+        mode: '0600'
+    
+    - name: Verify configuration file was created
+      stat:
+        path: /tmp/app_config.ini
+      register: config_file
+    
+    - name: Show configuration file status
+      debug:
+        msg: "Configuration file created: {{ config_file.stat.exists }}"
