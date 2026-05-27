@@ -1,0 +1,29 @@
+=== SYSTEM INFORMATION REPORT ===
+Generated on: {{ ansible_date_time.date }} at {{ ansible_date_time.time }}
+Hostname: {{ inventory_hostname }}
+IP Address: {{ ansible_default_ipv4.address }}
+Operating System: {{ ansible_distribution }} {{ ansible_distribution_version }}
+Architecture: {{ ansible_architecture }}
+CPU Cores: {{ ansible_processor_vcpus }}
+Memory: {{ ansible_memtotal_mb }} MB
+Disk Usage: {{ ansible_mounts[0].size_total // 1024 // 1024 // 1024 }} GB
+
+=== NETWORK INTERFACES ===
+{% for interface in ansible_interfaces %}
+{% if interface != 'lo' %}
+Interface: {{ interface }}
+{% if ansible_facts[interface]['ipv4'] is defined %}
+IP: {{ ansible_facts[interface]['ipv4']['address'] }}
+Netmask: {{ ansible_facts[interface]['ipv4']['netmask'] }}
+{% endif %}
+{% endif %}
+{% endfor %}
+
+=== MOUNTED FILESYSTEMS ===
+{% for mount in ansible_mounts %}
+Device: {{ mount.device }}
+Mount Point: {{ mount.mount }}
+Filesystem: {{ mount.fstype }}
+Size: {{ (mount.size_total / 1024 / 1024 / 1024) | round(2) }} GB
+Available: {{ (mount.size_available / 1024 / 1024 / 1024) | round(2) }} GB
+{% endfor %}
