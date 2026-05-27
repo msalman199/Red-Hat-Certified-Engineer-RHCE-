@@ -1,0 +1,33 @@
+---
+- name: Basic System Validation
+  hosts: all
+  gather_facts: yes
+  tasks:
+    - name: Validate minimum memory requirement
+      assert:
+        that:
+          - ansible_memory_mb.real.total >= 1024
+        fail_msg: "System has insufficient memory: {{ ansible_memory_mb.real.total }}MB (minimum 1024MB required)"
+        success_msg: "Memory requirement satisfied: {{ ansible_memory_mb.real.total }}MB"
+    
+    - name: Validate supported operating system
+      assert:
+        that:
+          - ansible_distribution in ['CentOS', 'RedHat', 'Ubuntu', 'Debian']
+        fail_msg: "Unsupported OS: {{ ansible_distribution }}"
+        success_msg: "Supported OS detected: {{ ansible_distribution }}"
+    
+    - name: Check if system is 64-bit
+      assert:
+        that:
+          - ansible_architecture == "x86_64"
+        fail_msg: "32-bit architecture not supported: {{ ansible_architecture }}"
+        success_msg: "64-bit architecture confirmed: {{ ansible_architecture }}"
+    
+    - name: Validate network connectivity
+      assert:
+        that:
+          - ansible_default_ipv4.address is defined
+        fail_msg: "No default IPv4 address found"
+        success_msg: "Network configured with IP: {{ ansible_default_ipv4.address }}"
+EOF
