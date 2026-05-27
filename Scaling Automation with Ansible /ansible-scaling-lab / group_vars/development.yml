@@ -1,0 +1,14 @@
+---
+environment: development
+app_version: "1.0.0-dev"
+debug_mode: true
+log_level: debug
+max_connections: 50
+cache_enabled: false
+backup_retention_days: 7
+
+database_config:
+  max_connections: 100
+  query_cache_size: 16M
+  innodb_buffer_pool_size: 128M
+EOF
