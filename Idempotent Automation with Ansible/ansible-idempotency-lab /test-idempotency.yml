@@ -1,0 +1,76 @@
+---
+- name: Comprehensive Idempotency Test
+  hosts: all
+  become: yes
+  vars:
+    test_results: []
+    
+  tasks:
+    - name: Ensure test directory structure
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - /opt/test-app
+        - /opt/test-app/config
+        - /opt/test-app/logs
+        - /opt/test-app/data
+      
+    - name: Create application configuration files
+      template:
+        src: app-config.j2
+        dest: "/opt/test-app/config/{{ item.name }}.conf"
+        mode: '0644'
+      loop:
+        - { name: "database", content: "host=localhost\nport=5432\ndb=testdb" }
+        - { name: "cache", content: "host=localhost\nport=6379\nttl=3600" }
+        - { name: "logging", content: "level=info\nfile=/opt/test-app/logs/app.log" }
+      vars:
+        config_content: "{{ item.content }}"
+      
+    - name: Ensure application user exists
+      user:
+        name: appuser
+        system: yes
+        home: /opt/test-app
+        shell: /bin/bash
+        state: present
+        
+    - name: Set proper ownership on application directories
+      file:
+        path: /opt/test-app
+        owner: appuser
+        group: appuser
+        recurse: yes
+        
+    - name: Create systemd service file
+      copy:
+        content: |
+          [Unit]
+          Description=Test Application
+          After=network.target
+          
+          [Service]
+          Type=simple
+          User=appuser
+          WorkingDirectory=/opt/test-app
+          ExecStart=/bin/bash -c 'while true; do echo "App running: $(date)" >> logs/app.log; sleep 60; done'
+          Restart=always
+          
+          [Install]
+          WantedBy=multi-user.target
+        dest: /etc/systemd/system/test-app.service
+        mode: '0644'
+      notify: reload systemd
+      
+    - name: Ensure service is enabled but not necessarily started
+      systemd:
+        name: test-app
+        enabled: yes
+        daemon_reload: yes
+        
+  handlers:
+    - name: reload systemd
+      systemd:
+        daemon_reload: yes
