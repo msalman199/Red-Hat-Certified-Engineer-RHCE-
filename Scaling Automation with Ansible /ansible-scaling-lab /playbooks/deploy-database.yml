@@ -1,0 +1,72 @@
+---
+- name: Deploy Database Servers
+  hosts: databases
+  become: yes
+  vars:
+    mysql_root_password: "SecurePass123!"
+    app_db_name: "scalable_app"
+    app_db_user: "app_user"
+    app_db_password: "AppPass123!"
+    
+  tasks:
+    - name: Install MySQL/MariaDB
+      yum:
+        name:
+          - mariadb-server
+          - mariadb
+          - python3-PyMySQL
+        state: present
+      tags: packages
+
+    - name: Start and enable MariaDB service
+      systemd:
+        name: mariadb
+        state: started
+        enabled: yes
+      tags: services
+
+    - name: Configure firewall for MySQL
+      firewalld:
+        port: 3306/tcp
+        permanent: yes
+        state: enabled
+        immediate: yes
+      tags: firewall
+
+    - name: Set MySQL root password
+      mysql_user:
+        name: root
+        password: "{{ mysql_root_password }}"
+        login_unix_socket: /var/lib/mysql/mysql.sock
+        state: present
+      tags: mysql
+
+    - name: Create application database
+      mysql_db:
+        name: "{{ app_db_name }}"
+        state: present
+        login_user: root
+        login_password: "{{ mysql_root_password }}"
+      tags: mysql
+
+    - name: Create application database user
+      mysql_user:
+        name: "{{ app_db_user }}"
+        password: "{{ app_db_password }}"
+        priv: "{{ app_db_name }}.*:ALL"
+        host: "%"
+        state: present
+        login_user: root
+        login_password: "{{ mysql_root_password }}"
+      tags: mysql
+
+    - name: Create sample table and data
+      mysql_query:
+        login_user: root
+        login_password: "{{ mysql_root_password }}"
+        login_db: "{{ app_db_name }}"
+        query:
+          - CREATE TABLE IF NOT EXISTS server_stats (id INT AUTO_INCREMENT PRIMARY KEY, hostname VARCHAR(255), last_update TIMESTAMP DEFAULT CURRENT_TIMESTAMP)
+          - INSERT INTO server_stats (hostname) VALUES ('{{ inventory_hostname }}') ON DUPLICATE KEY UPDATE last_update = CURRENT_TIMESTAMP
+      tags: mysql
+EOF
