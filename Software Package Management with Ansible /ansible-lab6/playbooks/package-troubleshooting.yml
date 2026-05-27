@@ -1,0 +1,112 @@
+---
+- name: Package Management Troubleshooting
+  hosts: all
+  become: yes
+  vars:
+    troubleshoot_packages:
+      - httpd
+      - mariadb-server
+      - php
+
+  tasks:
+    - name: Check for package manager locks
+      stat:
+        path: /var/lib/rpm/.rpm.lock
+      register: rpm_lock
+
+    - name: Display lock status
+      debug:
+        msg: "RPM database is {{ 'LOCKED' if rpm_lock.stat.exists else 'AVAILABLE' }}"
+
+    - name: Check RPM database integrity
+      command: rpm --rebuilddb
+      register: rebuild_result
+      changed_when: false
+      failed_when: false
+
+    - name: Verify package manager functionality
+      dnf:
+        list: installed
+      register: dnf_test
+      failed_when: false
+
+    - name: Display package manager status
+      debug:
+        msg: "Package manager status: {{ 'WORKING' if dnf_test.rc == 0 else 'ERROR' }}"
+
+    - name: Check for conflicting packages
+      shell: |
+        dnf list installed | grep -E "(conflict|obsolete)" || echo "No conflicts found"
+      register: conflicts
+      changed_when: false
+
+    - name: Display conflict information
+      debug:
+        var: conflicts.stdout_lines
+
+    - name: Attempt to fix broken dependencies
+      command: dnf check
+      register: dependency_check
+      failed_when: false
+      changed_when: false
+
+    - name: Fix dependencies if broken
+      dnf:
+        name: "*"
+        state: latest
+        update_only: yes
+      when: dependency_check.rc != 0
+
+    - name: Verify specific package installations
+      command: rpm -q {{ item }}
+      loop: "{{ troubleshoot_packages }}"
+      register: package_status
+      failed_when: false
+      changed_when: false
+
+    - name: Display package status
+      debug:
+        msg: "{{ item.item }}: {{ 'INSTALLED' if item.rc == 0 else 'NOT INSTALLED' }}"
+      loop: "{{ package_status.results }}"
+
+    - name: Clean package cache and metadata
+      command: "{{ item }}"
+      loop:
+        - dnf clean all
+        - dnf makecache
+      register: cleanup_result
+      changed_when: false
+
+    - name: Create recovery script
+      copy:
+        content: |
+          #!/bin/bash
+          # Package Management Recovery Script
+          echo "Starting package management recovery..."
+          
+          # Clean package cache
+          dnf clean all
+          
+          # Rebuild RPM database
+          rpm --rebuilddb
+          
+          # Update package cache
+          dnf makecache
+          
+          # Check for problems
+          dnf check
+          
+          echo "Recovery script completed."
+        dest: /usr/local/bin/package-recovery.sh
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Test recovery script
+      command: /usr/local/bin/package-recovery.sh
+      register: recovery_test
+      changed_when: false
+
+    - name: Display recovery results
+      debug:
+        var: recovery_test.stdout_lines
