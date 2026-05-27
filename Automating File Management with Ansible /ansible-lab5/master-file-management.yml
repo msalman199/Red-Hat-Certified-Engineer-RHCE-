@@ -1,0 +1,154 @@
+---
+- name: Master File Management Playbook - Lab 5 Complete
+  hosts: all
+  become: yes
+  vars:
+    lab_name: "Ansible File Management Lab 5"
+    lab_date: "{{ ansible_date_time.date }}"
+    admin_email: "admin@lab.local"
+    
+  tasks:
+    # Phase 1: Directory Structure Creation
+    - name: Create comprehensive directory structure
+      file:
+        path: "{{ item.path }}"
+        state: directory
+        mode: "{{ item.mode }}"
+        owner: "{{ item.owner | default('root') }}"
+        group: "{{ item.group | default('root') }}"
+      loop:
+        - { path: "/opt/lab-final", mode: "0755" }
+        - { path: "/opt/lab-final/config", mode: "0750" }
+        - { path: "/opt/lab-final/data", mode: "0755" }
+        - { path: "/opt/lab-final/logs", mode: "0755" }
+        - { path: "/opt/lab-final/scripts", mode: "0755" }
+        - { path: "/opt/lab-final/templates", mode: "0755" }
+        - { path: "/opt/lab-final/backup", mode: "0700" }
+        
+    # Phase 2: File Copying Operations
+    - name: Copy essential files from control node
+      copy:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+        mode: "{{ item.mode }}"
+        backup: yes
+      loop:
+        - { src: "files/welcome.txt", dest: "/opt/lab-final/welcome.txt", mode: "0644" }
+      when: item.src is exists
+      ignore_errors: yes
+      
+    # Phase 3: Template-based File Generation
+    - name: Generate configuration files from templates
+      template:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+        mode: "{{ item.mode }}"
+        backup: yes
+      loop:
+        - { src: "templates/system-report.j2", dest: "/opt/lab-final/system-report.txt", mode: "0644" }
+        - { src: "templates/app-config.j2", dest: "/opt/lab-final/config/final-app.conf", mode: "0600" }
+      when: item.src is exists
+      ignore_errors: yes
+      
+    # Phase 4: Dynamic Content Creation
+    - name: Create files with dynamic content
+      copy:
+        content: "{{ item.content }}"
+        dest: "{{ item.dest }}"
+        mode: "{{ item.mode }}"
+      loop:
+        - dest: "/opt/lab-final/lab-info.txt"
+          mode: "0644"
+          content: |
+            {{ lab_name }}
+            =========================
+            Date: {{ lab_date }}
+            Host: {{ inventory_hostname }}
+            IP: {{ ansible_default_ipv4.address }}
+            OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
+            Admin: {{ admin_email }}
+            
+            Lab Objectives Completed:
+            ✓ File copying from local to remote
+            ✓ Directory and file creation with templates
+            ✓ File modification using lineinfile
+            ✓ Advanced file management operations
+            
+        - dest: "/opt/lab-final/scripts/maintenance.sh"
+          mode: "0755"
+          content: |
+            #!/bin/bash
+            # Maintenance Script for {{ lab_name }}
+            # Generated on {{ ansible_date_time.iso8601 }}
+            
+            LOG_FILE="/opt/lab-final/logs/maintenance.log"
+            BACKUP_DIR="/opt/lab-final/backup"
+            
+            echo "$(date): Starting maintenance on {{ inventory_hostname }}" >> $LOG_FILE
+            
+            # Create backup of configuration files
+            cp -r /opt/lab-final/config/* $BACKUP_DIR/ 2>/dev/null
+            echo "$(date): Configuration backup completed" >> $LOG_FILE
+            
+            # Check disk space
+            DISK_USAGE=$(df /opt | tail -1 | awk '{print $5}' | sed 's/%//')
+            echo "$(date): Disk usage: ${DISK_USAGE}%" >> $LOG_FILE
+            
+            if [ $DISK_USAGE -gt 80 ]; then
+                echo "$(date): WARNING: Disk usage is above 80%" >> $LOG_FILE
+            fi
+            
+            echo "$(date): Maintenance completed successfully" >> $LOG_FILE
+            
+        - dest: "/opt/lab-final/data/inventory.json"
+          mode: "0644"
+          content: |
+            {
+              "lab_info": {
+                "name": "{{ lab_name }}",
+                "date": "{{ lab_date }}",
+                "admin": "{{ admin_email }}"
+              },
+              "servers": [
+            {% for host in groups['all'] %}
+                {
+                  "hostname": "{{ host }}",
+                  "ip": "{{ hostvars[host]['ansible_default_ipv4']['address'] }}",
+                  "os": "{{ hostvars[host]['ansible_distribution'] }} {{ hostvars[host]['ansible_distribution_version'] }}"
+                }{% if not loop.last %},{% endif %}
+            {% endfor %}
+              ]
+            }
+            
+    # Phase 5: File Modifications
+    - name: Create base configuration for modification
+      copy:
+        content: |
+          # Application Configuration
+          app_name=FinalLabApp
+          app_version=1.0.0
+          app_port=8080
+          app_debug=false
+          app_environment=production
+          
+          # Database Settings
+          db_host=localhost
+          db_port=5432
+          db_name=finallab
+          
+          # Security Settings
+          security_enabled=true
+          ssl_enabled=false
+          max_connections=50
+        dest: /opt/lab-final/config/app.properties
+        mode: '0644'
+        
+    - name: Modify configuration using lineinfile
+      lineinfile:
+        path: /opt/lab-final/config/app.properties
+        regexp: "{{ item.regexp }}"
+        line: "{{ item.line }}"
+        backup: yes
+      loop:
+        - { regexp: '^app_port=', line: 'app_port=9090' }
+        - { regexp: '^
