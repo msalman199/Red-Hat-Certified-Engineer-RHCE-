@@ -1,0 +1,22 @@
+---
+- name: Comprehensive Fact Gathering
+  hosts: all
+  gather_facts: yes
+  tasks:
+    - name: Display hostname and IP address
+      debug:
+        msg: "Host {{ ansible_hostname }} has IP {{ ansible_default_ipv4.address }}"
+    
+    - name: Show OS information
+      debug:
+        msg: "Running {{ ansible_distribution }} {{ ansible_distribution_version }}"
+    
+    - name: Display memory information
+      debug:
+        msg: "Total memory: {{ ansible_memory_mb.real.total }}MB, Available: {{ ansible_memory_mb.real.free }}MB"
+    
+    - name: Save facts to file
+      copy:
+        content: "{{ ansible_facts | to_nice_json }}"
+        dest: "/tmp/{{ ansible_hostname }}_facts.json"
+EOF
