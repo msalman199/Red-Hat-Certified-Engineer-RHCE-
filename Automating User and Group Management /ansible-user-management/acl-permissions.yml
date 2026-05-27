@@ -1,0 +1,121 @@
+---
+- name: Configure ACL Permissions
+  hosts: webservers
+  become: yes
+  vars:
+    acl_configurations:
+      # Web application directory ACLs
+      - path: /opt/projects/web-app
+        acls:
+          - entity: alice
+            etype: user
+            permissions: rwx
+          - entity: developers
+            etype: group
+            permissions: rwx
+          - entity: testers
+            etype: group
+            permissions: r-x
+          - entity: admins
+            etype: group
+            permissions: rwx
+
+      # Testing directory ACLs
+      - path: /opt/projects/testing
+        acls:
+          - entity: bob
+            etype: user
+            permissions: rwx
+          - entity: testers
+            etype: group
+            permissions: rwx
+          - entity: developers
+            etype: group
+            permissions: r-x
+          - entity: admins
+            etype: group
+            permissions: rwx
+
+      # Admin directory ACLs
+      - path: /opt/projects/admin
+        acls:
+          - entity: charlie
+            etype: user
+            permissions: rwx
+          - entity: admins
+            etype: group
+            permissions: rwx
+          - entity: alice
+            etype: user
+            permissions: r-x
+
+    default_acl_configurations:
+      # Default ACLs for new files/directories
+      - path: /opt/projects/web-app
+        default_acls:
+          - entity: developers
+            etype: group
+            permissions: rwx
+          - entity: testers
+            etype: group
+            permissions: r-x
+
+  tasks:
+    - name: Set ACL permissions on directories
+      acl:
+        path: "{{ item.0.path }}"
+        entity: "{{ item.1.entity }}"
+        etype: "{{ item.1.etype }}"
+        permissions: "{{ item.1.permissions }}"
+        state: present
+      with_subelements:
+        - "{{ acl_configurations }}"
+        - acls
+      tags: acl_permissions
+
+    - name: Set default ACL permissions
+      acl:
+        path: "{{ item.0.path }}"
+        entity: "{{ item.1.entity }}"
+        etype: "{{ item.1.etype }}"
+        permissions: "{{ item.1.permissions }}"
+        default: yes
+        state: present
+      with_subelements:
+        - "{{ default_acl_configurations }}"
+        - default_acls
+      tags: default_acls
+
+    - name: Create shared workspace with specific ACLs
+      file:
+        path: /opt/shared-workspace
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+      tags: shared_workspace
+
+    - name: Configure shared workspace ACLs
+      acl:
+        path: /opt/shared-workspace
+        entity: "{{ item.entity }}"
+        etype: "{{ item.etype }}"
+        permissions: "{{ item.permissions }}"
+        state: present
+      loop:
+        - { entity: developers, etype: group, permissions: rwx }
+        - { entity: testers, etype: group, permissions: rwx }
+        - { entity: admins, etype: group, permissions: rwx }
+        - { entity: alice, etype: user, permissions: rwx }
+        - { entity: bob, etype: user, permissions: rwx }
+        - { entity: charlie, etype: user, permissions: rwx }
+      tags: shared_workspace
+
+    - name: Remove specific ACL entries (example)
+      acl:
+        path: /opt/projects/admin
+        entity: bob
+        etype: user
+        state: absent
+      tags: remove_acl
+EOF
