@@ -1,0 +1,65 @@
+---
+- name: Comprehensive Service Status and Configuration Validation
+  hosts: webservers
+  become: yes
+  vars:
+    web_service: "{{ 'httpd' if ansible_os_family == 'RedHat' else 'apache2' }}"
+    services_to_check:
+      - "{{ web_service }}"
+      - "{{ 'crond' if ansible_os_family == 'RedHat' else 'cron' }}"
+      - sshd
+
+  tasks:
+    - name: Gather service facts
+      service_facts:
+
+    - name: Display all running services (first 10)
+      debug:
+        msg: "{{ item.key }} is {{ item.value.state }}"
+      loop: "{{ ansible_facts.services | dict2items | selectattr('value.state', 'equalto', 'running') | list[:10] }}"
+
+    - name: Check specific service status using systemd module
+      systemd:
+        name: "{{ item }}"
+      register: service_check
+      loop: "{{ services_to_check }}"
+
+    - name: Report service status details
+      debug:
+        msg: |
+          Service: {{ item.item }}
+          Active State: {{ item.status.ActiveState }}
+          Sub State: {{ item.status.SubState }}
+          Enabled: {{ item.status.UnitFileState }}
+          Main PID: {{ item.status.MainPID | default('N/A') }}
+      loop: "{{ service_check.results }}"
+
+    - name: Validate web service is responding
+      uri:
+        url: "http://{{ ansible_default_ipv4.address }}"
+        method: GET
+        status_code: 200
+        timeout: 10
+      delegate_to: localhost
+      register: web_response
+
+    - name: Display web service response
+      debug:
+        msg: "Web service responded with status: {{ web_response.status }}"
+
+    - name: Check service ports
+      wait_for:
+        port: "{{ item.port }}"
+        host: "{{ ansible_default_ipv4.address }}"
+        timeout: 5
+      delegate_to: localhost
+      loop:
+        - { service: "{{ web_service }}", port: 80 }
+        - { service: "sshd", port: 22 }
+      register: port_check
+
+    - name: Report port status
+      debug:
+        msg: "Port {{ item.item.port }} for {{ item.item.service }} is {{ 'open' if not item.failed else 'closed' }}"
+      loop: "{{ port_check.results }}"
+EOF
