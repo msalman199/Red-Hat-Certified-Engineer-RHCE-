@@ -1,0 +1,76 @@
+---
+- name: Advanced Lineinfile Operations
+  hosts: all
+  become: yes
+  
+  tasks:
+    - name: Create a hosts file for modification
+      copy:
+        content: |
+          127.0.0.1   localhost localhost.localdomain
+          ::1         localhost localhost.localdomain
+          
+          # Lab servers
+          192.168.1.10  node1.lab.local node1
+          192.168.1.11  node2.lab.local node2
+        dest: /opt/lab-app/hosts
+        mode: '0644'
+        
+    - name: Add database server entry using backrefs
+      lineinfile:
+        path: /opt/lab-app/hosts
+        regexp: '^(# Lab servers)$'
+        line: '\1\n192.168.1.20  db.lab.local database'
+        backrefs: yes
+        
+    - name: Insert multiple lines after a pattern
+      lineinfile:
+        path: /opt/lab-app/hosts
+        insertafter: '^192\.168\.1\.20'
+        line: "{{ item }}"
+      loop:
+        - "192.168.1.30  web.lab.local webserver"
+        - "192.168.1.40  cache.lab.local redis"
+        
+    - name: Modify line with validation
+      lineinfile:
+        path: /opt/lab-app/config/application.properties
+        regexp: '^log\.level='
+        line: 'log.level=DEBUG'
+        validate: 'grep -q "log.level=DEBUG" %s'
+        backup: yes
+        
+    - name: Use lineinfile with complex regex
+      lineinfile:
+        path: /opt/lab-app/config/system.conf
+        regexp: '^(SERVICE_USER=).*'
+        line: '\1{{ ansible_user }}'
+        backrefs: yes
+        
+    - name: Add line only if it doesn't exist
+      lineinfile:
+        path: /opt/lab-app/config/system.conf
+        line: 'CUSTOM_SETTING=enabled'
+        state: present
+        
+    - name: Create summary of advanced operations
+      copy:
+        content: |
+          Advanced Lineinfile Operations Summary
+          =====================================
+          
+          1. Used backrefs to modify existing lines while preserving parts
+          2. Inserted multiple lines after a specific pattern
+          3. Applied validation to ensure changes are correct
+          4. Used complex regex patterns for precise matching
+          5. Added lines conditionally (only if not present)
+          
+          Files Modified:
+          - /opt/lab-app/hosts: Added server entries
+          - /opt/lab-app/config/application.properties: Changed log level
+          - /opt/lab-app/config/system.conf: Updated service user and added custom setting
+          
+          Generated on: {{ ansible_date_time.iso8601 }}
+          Host: {{ inventory_hostname }}
+        dest: /opt/lab-app/advanced-operations-summary.txt
+        mode: '0644'
