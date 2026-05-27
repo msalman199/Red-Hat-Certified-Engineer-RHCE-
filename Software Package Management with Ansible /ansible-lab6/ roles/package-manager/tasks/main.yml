@@ -1,0 +1,50 @@
+---
+- name: Update package cache
+  dnf:
+    update_cache: "{{ package_manager_update_cache }}"
+  when: ansible_os_family == "RedHat"
+
+- name: Import EPEL GPG key
+  rpm_key:
+    key: https://dl.fedoraproject.org/pub/epel/RPM-GPG-KEY-EPEL-8
+    state: present
+  when: enable_epel and ansible_os_family == "RedHat"
+
+- name: Install EPEL repository
+  dnf:
+    name: epel-release
+    state: present
+  when: enable_epel and ansible_os_family == "RedHat"
+
+- name: Configure custom repositories
+  yum_repository:
+    name: "{{ item.name }}"
+    description: "{{ item.description }}"
+    baseurl: "{{ item.baseurl }}"
+    gpgcheck: "{{ item.gpgcheck | default(true) }}"
+    gpgkey: "{{ item.gpgkey | default(omit) }}"
+    enabled: "{{ item.enabled | default(true) }}"
+    state: present
+  loop: "{{ custom_repositories }}"
+  when: enable_custom_repos
+
+- name: Install default packages
+  dnf:
+    name: "{{ default_packages }}"
+    state: present
+
+- name: Install role-specific packages
+  dnf:
+    name: "{{ role_packages | default([]) }}"
+    state: present
+  when: role_packages is defined
+
+- name: Remove unwanted packages
+  dnf:
+    name: "{{ unwanted_packages }}"
+    state: absent
+    autoremove: "{{ package_manager_autoremove }}"
+
+- name: Clean package cache
+  command: dnf clean all
+  changed_when: false
