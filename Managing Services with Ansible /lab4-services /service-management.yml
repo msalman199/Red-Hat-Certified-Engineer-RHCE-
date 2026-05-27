@@ -1,0 +1,48 @@
+---
+- name: Service Management with Ansible
+  hosts: webservers
+  become: yes
+  vars:
+    services_to_manage:
+      - name: httpd
+        state: started
+        enabled: yes
+      - name: firewalld
+        state: started
+        enabled: yes
+  
+  tasks:
+    - name: Display current hostname
+      debug:
+        msg: "Managing services on {{ inventory_hostname }}"
+    
+    - name: Check if systemd is available
+      command: systemctl --version
+      register: systemd_check
+      changed_when: false
+      failed_when: systemd_check.rc != 0
+    
+    - name: Display systemd version
+      debug:
+        msg: "systemd version: {{ systemd_check.stdout_lines[0] }}"
+    
+    - name: Install required packages
+      yum:
+        name:
+          - httpd
+          - firewalld
+        state: present
+    
+    - name: Manage multiple services
+      systemd:
+        name: "{{ item.name }}"
+        state: "{{ item.state }}"
+        enabled: "{{ item.enabled }}"
+        daemon_reload: yes
+      loop: "{{ services_to_manage }}"
+      register: service_results
+    
+    - name: Display service management results
+      debug:
+        msg: "Service {{ item.item.name }} - Changed: {{ item.changed }}"
+      loop: "{{ service_results.results }}"
