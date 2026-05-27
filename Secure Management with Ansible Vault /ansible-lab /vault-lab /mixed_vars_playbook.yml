@@ -1,0 +1,29 @@
+---
+- name: Mixed Variables Demonstration
+  hosts: localhost
+  vars_files:
+    - db_secrets.yml
+  vars:
+    # Plain variables (non-sensitive)
+    app_version: "2.1.0"
+    deployment_date: "2024-01-15"
+    environment: "production"
+    
+  tasks:
+    - name: Show public information
+      debug:
+        msg: |
+          Application Version: {{ app_version }}
+          Deployment Date: {{ deployment_date }}
+          Environment: {{ environment }}
+    
+    - name: Create database connection test
+      shell: |
+        echo "Testing connection to {{ db_host }}:{{ db_port }}"
+        echo "Database: {{ db_name }}"
+        echo "Connection test completed"
+      register: db_test
+    
+    - name: Display connection test results
+      debug:
+        var: db_test.stdout_lines
