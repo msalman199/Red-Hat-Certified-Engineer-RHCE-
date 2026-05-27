@@ -1,0 +1,94 @@
+---
+- name: Database Server Configuration Validation
+  hosts: databases
+  gather_facts: yes
+  become: yes
+  vars:
+    db_packages:
+      - mariadb-server
+      - mariadb
+    db_service: mariadb
+    db_port: 3306
+    db_config_file: "/etc/my.cnf"
+    db_data_dir: "/var/lib/mysql"
+  
+  tasks:
+    - name: Install database packages
+      package:
+        name: "{{ db_packages }}"
+        state: present
+    
+    - name: Start and enable database service
+      service:
+        name: "{{ db_service }}"
+        state: started
+        enabled: yes
+    
+    - name: Gather updated facts
+      setup:
+    
+    - name: Gather package facts
+      package_facts:
+        manager: auto
+    
+    - name: Gather service facts
+      service_facts:
+    
+    - name: Validate database packages are installed
+      assert:
+        that:
+          - item in ansible_facts.packages
+        fail_msg: "Database package {{ item }} is not installed"
+        success_msg: "Database package {{ item }} is installed"
+      loop: "{{ db_packages }}"
+    
+    - name: Validate database service is running
+      assert:
+        that:
+          - ansible_facts.services[db_service + '.service'].state == 'running'
+          - ansible_facts.services[db_service + '.service'].status == 'enabled'
+        fail_msg: "Database service {{ db_service }} is not properly configured"
+        success_msg: "Database service {{ db_service }} is running and enabled"
+    
+    - name: Check if database is listening on correct port
+      wait_for:
+        port: "{{ db_port }}"
+        host: "{{ ansible_default_ipv4.address }}"
+        timeout: 10
+      register: port_check
+      ignore_errors: yes
+    
+    - name: Validate database port accessibility
+      assert:
+        that:
+          - port_check is succeeded
+        fail_msg: "Database is not listening on port {{ db_port }}"
+        success_msg: "Database is listening on port {{ db_port }}"
+    
+    - name: Check database data directory
+      stat:
+        path: "{{ db_data_dir }}"
+      register: data_dir_stat
+    
+    - name: Validate database data directory
+      assert:
+        that:
+          - data_dir_stat.stat.exists
+          - data_dir_stat.stat.isdir
+        fail_msg: "Database data directory {{ db_data_dir }} is not properly configured"
+        success_msg: "Database data directory {{ db_data_dir }} exists"
+    
+    - name: Test database connectivity
+      command: mysql -e "SELECT 1"
+      register: db_test
+      ignore_errors: yes
+      changed_when: false
+    
+    - name: Validate database connectivity
+      assert:
+        that:
+          - db_test.rc == 0
+        fail_msg: "Cannot connect to database"
+        success_msg: "Database connectivity test passed"
+      when: db_test is defined
+EOF
