@@ -1,0 +1,81 @@
+---
+- name: Automated Service Recovery and Monitoring
+  hosts: webservers
+  become: yes
+  vars:
+    web_service: "{{ 'httpd' if ansible_os_family == 'RedHat' else 'apache2' }}"
+    max_restart_attempts: 3
+
+  tasks:
+    - name: Check if service is running
+      systemd:
+        name: "{{ web_service }}"
+      register: service_status
+
+    - name: Attempt service recovery if not running
+      block:
+        - name: Stop service gracefully
+          systemd:
+            name: "{{ web_service }}"
+            state: stopped
+          when: service_status.status.ActiveState != "active"
+
+        - name: Clear any lock files
+          file:
+            path: "{{ item }}"
+            state: absent
+          loop:
+            - /var/lock/subsys/httpd
+            - /var/run/httpd/httpd.pid
+          when: ansible_os_family == "RedHat"
+
+        - name: Start service
+          systemd:
+            name: "{{ web_service }}"
+            state: started
+            daemon_reload: yes
+
+        - name: Wait for service to be fully started
+          wait_for:
+            port: 80
+            host: "{{ ansible_default_ipv4.address }}"
+            timeout: 30
+          delegate_to: localhost
+
+        - name: Verify service is responding
+          uri:
+            url: "http://{{ ansible_default_ipv4.address }}"
+            method: GET
+            status_code: 200
+          delegate_to: localhost
+
+      rescue:
+        - name: Log recovery failure
+          debug:
+            msg: "Failed to recover {{ web_service }} on {{ inventory_hostname }}"
+
+        - name: Check system resources
+          shell: |
+            echo "=== DISK USAGE ==="
+            df -h
+            echo "=== MEMORY USAGE ==="
+            free -h
+            echo "=== LOAD AVERAGE ==="
+            uptime
+          register: system_resources
+
+        - name: Display system resources
+          debug:
+            var: system_resources.stdout_lines
+
+      when: service_status.status.ActiveState != "active"
+
+    - name: Final service status check
+      systemd:
+        name: "{{ web_service }}"
+      register: final_status
+
+    - name: Report final status
+      debug:
+        msg: "{{ web_service }} final status: {{ final_status.status.ActiveState }}"
+EOF
