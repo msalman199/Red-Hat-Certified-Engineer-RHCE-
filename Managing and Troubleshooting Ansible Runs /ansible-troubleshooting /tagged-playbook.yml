@@ -1,0 +1,40 @@
+---
+- name: Web Server Setup with Tags
+  hosts: webservers
+  become: yes
+  vars:
+    web_package: httpd
+    web_service: httpd
+    document_root: /var/www/html
+    
+  tasks:
+    - name: Install web server
+      yum:
+        name: "{{ web_package }}"
+        state: present
+      tags: install
+        
+    - name: Start and enable web service
+      systemd:
+        name: "{{ web_service }}"
+        state: started
+        enabled: yes
+      tags: service
+        
+    - name: Create index.html
+      copy:
+        content: "<h1>Welcome to {{ ansible_hostname }}</h1>"
+        dest: "{{ document_root }}/index.html"
+        owner: apache
+        group: apache
+        mode: '0644'
+      tags: content
+        
+    - name: Configure firewall
+      firewalld:
+        service: http
+        permanent: yes
+        state: enabled
+        immediate: yes
+      tags: firewall
+EOF
