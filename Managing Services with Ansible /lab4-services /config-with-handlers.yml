@@ -1,0 +1,118 @@
+---
+- name: Apache Configuration Management with Handlers
+  hosts: webservers
+  become: yes
+  vars:
+    apache_config_dir: /etc/httpd/conf.d
+    custom_config_file: "{{ apache_config_dir }}/custom.conf"
+  
+  handlers:
+    - name: restart apache
+      systemd:
+        name: httpd
+        state: restarted
+      listen: "restart web services"
+    
+    - name: reload apache
+      systemd:
+        name: httpd
+        state: reloaded
+      listen: "reload web services"
+    
+    - name: restart firewalld
+      systemd:
+        name: firewalld
+        state: restarted
+      listen: "restart firewall"
+  
+  tasks:
+    - name: Ensure Apache is installed
+      yum:
+        name: httpd
+        state: present
+    
+    - name: Create custom Apache configuration
+      copy:
+        content: |
+          # Custom Apache Configuration
+          # Managed by Ansible - Do not edit manually
+          
+          # Security Headers
+          Header always set X-Content-Type-Options nosniff
+          Header always set X-Frame-Options DENY
+          Header always set X-XSS-Protection "1; mode=block"
+          
+          # Performance Settings
+          KeepAlive On
+          MaxKeepAliveRequests 100
+          KeepAliveTimeout 15
+          
+          # Custom Log Format
+          LogFormat "%h %l %u %t \"%r\" %>s %O \"%{Referer}i\" \"%{User-Agent}i\"" combined_custom
+          
+          # Virtual Host Configuration
+          <VirtualHost *:80>
+              ServerName {{ inventory_hostname }}
+              DocumentRoot /var/www/html
+              ErrorLog logs/{{ inventory_hostname }}_error.log
+              CustomLog logs/{{ inventory_hostname }}_access.log combined_custom
+          </VirtualHost>
+        dest: "{{ custom_config_file }}"
+        owner: root
+        group: root
+        mode: '0644'
+        backup: yes
+      notify:
+        - "restart web services"
+      register: config_result
+    
+    - name: Update main Apache configuration
+      lineinfile:
+        path: /etc/httpd/conf/httpd.conf
+        regexp: '^ServerTokens'
+        line: 'ServerTokens Prod'
+        backup: yes
+      notify:
+        - "reload web services"
+    
+    - name: Configure Apache to hide version information
+      lineinfile:
+        path: /etc/httpd/conf/httpd.conf
+        regexp: '^ServerSignature'
+        line: 'ServerSignature Off'
+        backup: yes
+      notify:
+        - "reload web services"
+    
+    - name: Ensure Apache is started and enabled
+      systemd:
+        name: httpd
+        state: started
+        enabled: yes
+    
+    - name: Create a test page to verify configuration
+      copy:
+        content: |
+          <!DOCTYPE html>
+          <html>
+          <head>
+              <title>Configuration Test - {{ inventory_hostname }}</title>
+          </head>
+          <body>
+              <h1>Apache Configuration Updated</h1>
+              <p>Server: {{ inventory_hostname }}</p>
+              <p>Configuration last updated: {{ ansible_date_time.iso8601 }}</p>
+              <p>Custom configuration applied successfully!</p>
+          </body>
+          </html>
+        dest: /var/www/html/config-test.html
+        owner: apache
+        group: apache
+        mode: '0644'
+    
+    - name: Display configuration change status
+      debug:
+        msg: |
+          Configuration Status:
+          - Custom config changed: {{ config_result.changed }}
+          - Handlers will {{ 'be triggered' if config_result.changed else 'not be triggered' }}
