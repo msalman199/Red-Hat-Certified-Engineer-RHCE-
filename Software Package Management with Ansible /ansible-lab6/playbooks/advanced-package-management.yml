@@ -1,0 +1,63 @@
+---
+- name: Advanced Package Management
+  hosts: all
+  become: yes
+  vars:
+    web_packages:
+      - httpd
+      - mod_ssl
+      - php
+      - php-mysql
+    db_packages:
+      - mariadb-server
+      - mariadb
+      - python3-PyMySQL
+    dev_packages:
+      - gcc
+      - make
+      - kernel-devel
+
+  tasks:
+    - name: Install web server packages on webservers
+      dnf:
+        name: "{{ web_packages }}"
+        state: present
+      when: inventory_hostname in groups['webservers']
+      notify: restart httpd
+
+    - name: Install database packages on database servers
+      dnf:
+        name: "{{ db_packages }}"
+        state: present
+      when: inventory_hostname in groups['databases']
+      notify: start mariadb
+
+    - name: Install development tools on all servers
+      dnf:
+        name: "{{ dev_packages }}"
+        state: present
+
+    - name: Ensure specific package versions
+      dnf:
+        name: "git-2.39*"
+        state: present
+      ignore_errors: yes
+
+    - name: Remove packages with dependencies
+      dnf:
+        name: sendmail
+        state: absent
+        autoremove: yes
+
+  handlers:
+    - name: restart httpd
+      systemd:
+        name: httpd
+        state: restarted
+        enabled: yes
+
+    - name: start mariadb
+      systemd:
+        name: mariadb
+        state: started
+        enabled: yes
