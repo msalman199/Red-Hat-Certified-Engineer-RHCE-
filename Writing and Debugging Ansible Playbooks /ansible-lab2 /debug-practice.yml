@@ -1,0 +1,30 @@
+---
+- name: Debugging Practice Playbook
+  hosts: webservers
+  become: yes
+  
+  tasks:
+    # Error 1: Incorrect indentation
+  - name: Install package with wrong indentation
+    yum:
+      name: htop
+      state: present
+      
+    # Error 2: Missing required parameter
+    - name: Create directory without path
+      file:
+        state: directory
+        mode: '0755'
+        
+    # Error 3: Invalid module parameter
+    - name: Copy file with invalid parameter
+      copy:
+        source: /tmp/nonexistent.txt
+        dest: /tmp/test.txt
+        invalid_param: yes
+        
+    # Error 4: Syntax error in template
+    - name: Create file with template error
+      copy:
+        content: "Hello {{ inventory_hostname"
+        dest: /tmp/broken.txt
