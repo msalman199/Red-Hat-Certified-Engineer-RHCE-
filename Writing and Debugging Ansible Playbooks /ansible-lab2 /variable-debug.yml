@@ -1,0 +1,39 @@
+---
+- name: Variable Debugging Example
+  hosts: webservers
+  become: yes
+  gather_facts: yes
+  
+  vars:
+    custom_message: "Hello from Ansible"
+    package_list:
+      - vim
+      - curl
+      - wget
+  
+  tasks:
+    - name: Debug custom variables
+      debug:
+        msg: "Custom message is: {{ custom_message }}"
+        
+    - name: Debug system facts
+      debug:
+        var: ansible_distribution
+        
+    - name: Debug multiple variables
+      debug:
+        msg: |
+          Hostname: {{ inventory_hostname }}
+          OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
+          Architecture: {{ ansible_architecture }}
+          IP Address: {{ ansible_default_ipv4.address }}
+          
+    - name: Debug list variables
+      debug:
+        msg: "Package {{ item }} will be installed"
+      loop: "{{ package_list }}"
+      
+    - name: Conditional debugging
+      debug:
+        msg: "This is a Red Hat-based system"
+      when: ansible_os_family == "RedHat"
