@@ -1,0 +1,83 @@
+---
+- name: Create Base Configuration Files for Modification
+  hosts: all
+  become: yes
+  
+  tasks:
+    - name: Create SSH configuration file
+      copy:
+        content: |
+          # SSH Configuration File
+          Port 22
+          Protocol 2
+          PermitRootLogin no
+          PasswordAuthentication yes
+          PubkeyAuthentication yes
+          X11Forwarding no
+          PrintMotd yes
+          PrintLastLog yes
+          TCPKeepAlive yes
+          ClientAliveInterval 0
+          ClientAliveCountMax 3
+        dest: /etc/ssh/sshd_config_lab
+        mode: '0644'
+        owner: root
+        group: root
+        backup: yes
+        
+    - name: Create application properties file
+      copy:
+        content: |
+          # Application Properties
+          app.name=MyApplication
+          app.version=1.0.0
+          app.debug=false
+          app.port=8080
+          app.host=localhost
+          
+          # Database Configuration
+          db.host=localhost
+          db.port=5432
+          db.name=myapp
+          db.user=appuser
+          
+          # Logging Configuration
+          log.level=INFO
+          log.file=/var/log/myapp.log
+          log.max.size=10MB
+          
+          # Security Settings
+          security.enabled=true
+          security.ssl=false
+          security.timeout=3600
+        dest: /opt/lab-app/config/application.properties
+        mode: '0644'
+        owner: root
+        group: root
+        
+    - name: Create system configuration file
+      copy:
+        content: |
+          # System Configuration
+          HOSTNAME={{ inventory_hostname }}
+          ENVIRONMENT=production
+          MAX_CONNECTIONS=100
+          TIMEOUT=30
+          ENABLE_LOGGING=yes
+          LOG_LEVEL=info
+          BACKUP_ENABLED=no
+          MONITORING=disabled
+          
+          # Network Settings
+          NETWORK_INTERFACE=eth0
+          IP_ADDRESS={{ ansible_default_ipv4.address }}
+          NETMASK=255.255.255.0
+          
+          # Service Settings
+          SERVICE_USER=appuser
+          SERVICE_GROUP=appgroup
+          SERVICE_HOME=/opt/lab-app
+        dest: /opt/lab-app/config/system.conf
+        mode: '0644'
+        owner: root
+        group: root
