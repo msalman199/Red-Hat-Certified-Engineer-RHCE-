@@ -1,0 +1,42 @@
+---
+- name: Conditional Idempotent Operations
+  hosts: all
+  become: yes
+  tasks:
+    - name: Check if custom configuration exists
+      stat:
+        path: /etc/custom-app.conf
+      register: custom_config
+      
+    - name: Create initial configuration only if it doesn't exist
+      copy:
+        content: |
+          # Custom Application Configuration
+          app_name=MyApp
+          version=1.0
+          debug=false
+        dest: /etc/custom-app.conf
+        mode: '0644'
+      when: not custom_config.stat.exists
+      
+    - name: Ensure specific configuration line exists
+      lineinfile:
+        path: /etc/custom-app.conf
+        regexp: '^log_level='
+        line: 'log_level=info'
+        state: present
+      
+    - name: Ensure debug is disabled (idempotent replacement)
+      replace:
+        path: /etc/custom-app.conf
+        regexp: '^debug=true'
+        replace: 'debug=false'
+      
+    - name: Create backup only if file was modified today
+      copy:
+        src: /etc/custom-app.conf
+        dest: /etc/custom-app.conf.backup
+        remote_src: yes
+      when: 
+        - custom_config.stat.exists
+        - custom_config.stat.mtime > (ansible_date_time.epoch | int - 86400)
