@@ -1,0 +1,55 @@
+---
+- name: Format and Mount Logical Volumes
+  hosts: storage_servers
+  become: yes
+  vars:
+    volume_group_name: vg_data
+    logical_volumes:
+      - name: lv_web
+        size: 2G
+        mount_point: /var/www
+        filesystem: ext4
+        mount_options: defaults
+      - name: lv_logs
+        size: 1G
+        mount_point: /var/log/apps
+        filesystem: xfs
+        mount_options: defaults,noatime
+      - name: lv_backup
+        size: 1G
+        mount_point: /backup
+        filesystem: ext4
+        mount_options: defaults
+
+  tasks:
+    - name: Create mount point directories
+      file:
+        path: "{{ item.mount_point }}"
+        state: directory
+        mode: '0755'
+      loop: "{{ logical_volumes }}"
+
+    - name: Format logical volumes with specified filesystem
+      filesystem:
+        fstype: "{{ item.filesystem }}"
+        dev: "/dev/{{ volume_group_name }}/{{ item.name }}"
+        force: no
+      loop: "{{ logical_volumes }}"
+
+    - name: Mount logical volumes temporarily
+      mount:
+        path: "{{ item.mount_point }}"
+        src: "/dev/{{ volume_group_name }}/{{ item.name }}"
+        fstype: "{{ item.filesystem }}"
+        opts: "{{ item.mount_options }}"
+        state: mounted
+      loop: "{{ logical_volumes }}"
+
+    - name: Verify mounted filesystems
+      command: df -h
+      register: df_output
+      changed_when: false
+
+    - name: Display mounted filesystems
+      debug:
+        msg: "{{ df_output.stdout_lines }}"
