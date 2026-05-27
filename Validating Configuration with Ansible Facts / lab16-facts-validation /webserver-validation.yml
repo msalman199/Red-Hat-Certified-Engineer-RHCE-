@@ -1,0 +1,112 @@
+---
+- name: Web Server Configuration Validation
+  hosts: webservers
+  gather_facts: yes
+  become: yes
+  vars:
+    web_packages:
+      - httpd
+      - mod_ssl
+    web_services:
+      - httpd
+    required_ports:
+      - 80
+      - 443
+    document_root: "/var/www/html"
+    config_file: "/etc/httpd/conf/httpd.conf"
+  
+  tasks:
+    - name: Ensure web packages are installed
+      package:
+        name: "{{ web_packages }}"
+        state: present
+      register: package_result
+    
+    - name: Gather updated package facts
+      package_facts:
+        manager: auto
+    
+    - name: Validate web packages installation
+      assert:
+        that:
+          - item in ansible_facts.packages
+        fail_msg: "Web package {{ item }} failed to install"
+        success_msg: "Web package {{ item }} is properly installed"
+      loop: "{{ web_packages }}"
+    
+    - name: Start and enable web services
+      service:
+        name: "{{ item }}"
+        state: started
+        enabled: yes
+      loop: "{{ web_services }}"
+    
+    - name: Gather service facts
+      service_facts:
+    
+    - name: Validate web services are running
+      assert:
+        that:
+          - ansible_facts.services[item + '.service'].state == 'running'
+          - ansible_facts.services[item + '.service'].status == 'enabled'
+        fail_msg: "Web service {{ item }} is not properly configured"
+        success_msg: "Web service {{ item }} is running and enabled"
+      loop: "{{ web_services }}"
+    
+    - name: Check if document root exists
+      stat:
+        path: "{{ document_root }}"
+      register: docroot_stat
+    
+    - name: Validate document root directory
+      assert:
+        that:
+          - docroot_stat.stat.exists
+          - docroot_stat.stat.isdir
+        fail_msg: "Document root {{ document_root }} is not properly configured"
+        success_msg: "Document root {{ document_root }} exists and is accessible"
+    
+    - name: Create test index file
+      copy:
+        content: |
+          <html>
+          <head><title>Test Page</title></head>
+          <body>
+          <h1>Server: {{ ansible_hostname }}</h1>
+          <p>IP Address: {{ ansible_default_ipv4.address }}</p>
+          <p>OS: {{ ansible_distribution }} {{ ansible_distribution_version }}</p>
+          </body>
+          </html>
+        dest: "{{ document_root }}/index.html"
+        owner: apache
+        group: apache
+        mode: '0644'
+    
+    - name: Validate configuration file exists
+      stat:
+        path: "{{ config_file }}"
+      register: config_stat
+    
+    - name: Assert configuration file is present
+      assert:
+        that:
+          - config_stat.stat.exists
+        fail_msg: "Apache configuration file missing: {{ config_file }}"
+        success_msg: "Apache configuration file found: {{ config_file }}"
+    
+    - name: Test web server response
+      uri:
+        url: "http://{{ ansible_default_ipv4.address }}"
+        method: GET
+        status_code: 200
+      register: web_response
+      ignore_errors: yes
+    
+    - name: Validate web server is responding
+      assert:
+        that:
+          - web_response.status == 200
+        fail_msg: "Web server is not responding properly"
+        success_msg: "Web server is responding correctly"
+      when: web_response is defined
+EOF
