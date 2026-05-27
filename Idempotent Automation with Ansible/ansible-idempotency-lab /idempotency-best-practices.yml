@@ -1,0 +1,89 @@
+---
+- name: Idempotency Best Practices Demonstration
+  hosts: all
+  become: yes
+  vars:
+    app_version: "2.1.0"
+    config_hash: "{{ lookup('file', 'templates/app-config.j2') | hash('md5') }}"
+    
+  tasks:
+    # Pattern 1: Using 'creates' parameter for command/shell tasks
+    - name: Download application archive (idempotent with creates)
+      get_url:
+        url: "https://github.com/example/app/archive/v{{ app_version }}.tar.gz"
+        dest: "/tmp/app-{{ app_version }}.tar.gz"
+        mode: '0644'
+      
+    - name: Extract application (idempotent with creates)
+      unarchive:
+        src: "/tmp/app-{{ app_version }}.tar.gz"
+        dest: /opt/
+        remote_src: yes
+        creates: "/opt/app-{{ app_version }}"
+        
+    # Pattern 2: Using register and when for conditional execution
+    - name: Check if application is already configured
+      stat:
+        path: "/opt/app-{{ app_version }}/configured.flag"
+      register: app_configured
+      
+    - name: Run application setup (only if not configured)
+      shell: |
+        cd /opt/app-{{ app_version }}
+        ./setup.sh
+        touch configured.flag
+      when: not app_configured.stat.exists
+      
+    # Pattern 3: Using changed_when to control change reporting
+    - name: Check application status
+      shell: "/opt/app-{{ app_version }}/bin/app --status"
+      register: app_status
+      changed_when: false
+      failed_when: app_status.rc not in [0, 1]
+      
+    # Pattern 4: Idempotent file modifications
+    - name: Ensure configuration line exists
+      lineinfile:
+        path: "/opt/app-{{ app_version }}/config/app.conf"
+        regexp: '^version='
+        line: "version={{ app_version }}"
+        create: yes
+        
+    # Pattern 5: Using blockinfile for multi-line configurations
+    - name: Ensure logging configuration block
+      blockinfile:
+        path: "/opt/app-{{ app_version }}/config/logging.conf"
+        block: |
+          # Logging Configuration
+          log.level=INFO
+          log.file=/var/log/app.log
+          log.rotation=daily
+          log.retention=30
+        marker: "# {mark} ANSIBLE MANAGED LOGGING BLOCK"
+        create: yes
+        
+    # Pattern 6: Idempotent service management
+    - name: Ensure application service file
+      template:
+        src: app.service.j2
+        dest: /etc/systemd/system/myapp.service
+      notify:
+        - reload systemd
+        - restart myapp
+        
+    - name: Ensure service is enabled and started
+      systemd:
+        name: myapp
+        enabled: yes
+        state: started
+        daemon_reload: yes
+        
+  handlers:
+    - name: reload systemd
+      systemd:
+        daemon_reload: yes
+        
+    - name: restart myapp
+      systemd:
+        name: myapp
+        state: restarted
