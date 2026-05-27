@@ -1,0 +1,82 @@
+---
+- name: Deploy and Configure Apache Web Servers
+  hosts: webservers
+  become: yes
+  vars:
+    web_service: httpd
+    web_port: 80
+    document_root: /var/www/html
+  
+  tasks:
+    - name: Install Apache HTTP Server
+      yum:
+        name: "{{ web_service }}"
+        state: present
+      tags: install
+    
+    - name: Create custom index.html for each server
+      copy:
+        content: |
+          <!DOCTYPE html>
+          <html>
+          <head>
+              <title>Welcome to {{ inventory_hostname }}</title>
+              <style>
+                  body { font-family: Arial, sans-serif; margin: 40px; }
+                  .header { color: #2c3e50; text-align: center; }
+                  .info { background-color: #ecf0f1; padding: 20px; border-radius: 5px; }
+              </style>
+          </head>
+          <body>
+              <h1 class="header">Apache Web Server</h1>
+              <div class="info">
+                  <h2>Server Information</h2>
+                  <p><strong>Hostname:</strong> {{ inventory_hostname }}</p>
+                  <p><strong>IP Address:</strong> {{ ansible_default_ipv4.address }}</p>
+                  <p><strong>Managed by:</strong> Ansible</p>
+                  <p><strong>Service Status:</strong> Active and Running</p>
+              </div>
+          </body>
+          </html>
+        dest: "{{ document_root }}/index.html"
+        owner: apache
+        group: apache
+        mode: '0644'
+      tags: content
+    
+    - name: Start and enable Apache service
+      systemd:
+        name: "{{ web_service }}"
+        state: started
+        enabled: yes
+        daemon_reload: yes
+      register: apache_service
+      tags: service
+    
+    - name: Configure firewall for HTTP traffic
+      firewalld:
+        service: http
+        permanent: yes
+        state: enabled
+        immediate: yes
+      tags: firewall
+    
+    - name: Verify Apache is responding
+      uri:
+        url: "http://{{ ansible_default_ipv4.address }}"
+        method: GET
+        status_code: 200
+      register: web_response
+      retries: 3
+      delay: 5
+      tags: verify
+    
+    - name: Display service status
+      debug:
+        msg: |
+          Apache Service Status:
+          - Service: {{ web_service }}
+          - State: {{ 'Started' if apache_service.changed else 'Already Running' }}
+          - Enabled: {{ apache_service.enabled }}
+          - Web Response: {{ web_response.status }} {{ web_response.msg }}
+      tags: status
