@@ -1,0 +1,41 @@
+---
+- name: Copy Files from Local to Remote Machines
+  hosts: all
+  become: yes
+  vars:
+    destination_path: /opt/lab-files
+    
+  tasks:
+    - name: Create destination directory on remote machines
+      file:
+        path: "{{ destination_path }}"
+        state: directory
+        mode: '0755'
+        owner: root
+        group: root
+      
+    - name: Copy welcome file to remote machines
+      copy:
+        src: files/welcome.txt
+        dest: "{{ destination_path }}/welcome.txt"
+        mode: '0644'
+        owner: root
+        group: root
+        backup: yes
+      notify: Display copy status
+      
+    - name: Copy multiple files using with_items
+      copy:
+        content: "{{ item.content }}"
+        dest: "{{ destination_path }}/{{ item.filename }}"
+        mode: '0644'
+        owner: root
+        group: root
+      with_items:
+        - { filename: "server-info.txt", content: "Server: {{ inventory_hostname }}\nIP: {{ ansible_default_ipv4.address }}\nOS: {{ ansible_distribution }} {{ ansible_distribution_version }}" }
+        - { filename: "lab-status.txt", content: "Lab 5: File Management\nStatus: In Progress\nStudent: {{ ansible_user }}" }
+        
+  handlers:
+    - name: Display copy status
+      debug:
+        msg: "File successfully copied to {{ inventory_hostname }}"
