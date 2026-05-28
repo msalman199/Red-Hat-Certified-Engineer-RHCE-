@@ -1,0 +1,58 @@
+---
+# Main tasks for service configuration role
+- name: Install required packages
+  package:
+    name: "{{ item.package }}"
+    state: present
+  loop: "{{ services_to_manage }}"
+  when: 
+    - services_to_manage is defined
+    - item.package is defined
+  become: true
+
+- name: Backup existing configuration files
+  copy:
+    src: "{{ item.dest }}"
+    dest: "{{ item.dest }}.backup.{{ ansible_date_time.epoch }}"
+    remote_src: true
+  loop: "{{ service_config_files }}"
+  when: 
+    - service_config_files is defined
+    - backup_configs | bool
+  become: true
+  ignore_errors: true
+
+- name: Deploy service configuration files
+  template:
+    src: "{{ item.template }}"
+    dest: "{{ item.dest }}"
+    owner: "{{ item.owner | default('root') }}"
+    group: "{{ item.group | default('root') }}"
+    mode: "{{ item.mode | default('0644') }}"
+    backup: "{{ backup_configs | bool }}"
+  loop: "{{ service_config_files }}"
+  when: service_config_files is defined
+  become: true
+  notify: 
+    - restart service
+
+- name: Ensure services are in desired state
+  service:
+    name: "{{ item.name }}"
+    state: "{{ item.state | default(default_service_state) }}"
+    enabled: "{{ item.enabled | default(default_service_enabled) }}"
+  loop: "{{ services_to_manage }}"
+  when: services_to_manage is defined
+  become: true
+
+- name: Verify service status
+  service_facts:
+  register: service_status
+
+- name: Display service status
+  debug:
+    msg: "Service {{ item.name }} is {{ ansible_facts.services[item.name + '.service'].state }}"
+  loop: "{{ services_to_manage }}"
+  when: 
+    - services_to_manage is defined
+    - ansible_facts.services[item.name + '.service'] is defined
