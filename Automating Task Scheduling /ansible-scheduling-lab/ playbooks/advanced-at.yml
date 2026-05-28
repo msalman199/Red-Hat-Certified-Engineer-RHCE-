@@ -1,0 +1,50 @@
+---
+- name: Advanced At Job Scheduling
+  hosts: all
+  become: yes
+  vars:
+    maintenance_script: /usr/local/bin/maintenance.sh
+    
+  tasks:
+    - name: Create maintenance script
+      copy:
+        content: |
+          #!/bin/bash
+          echo "Starting maintenance at $(date)" >> /var/log/maintenance.log
+          
+          # Stop services
+          systemctl stop httpd 2>/dev/null || true
+          systemctl stop nginx 2>/dev/null || true
+          
+          # Perform maintenance tasks
+          yum clean all
+          find /tmp -type f -mtime +1 -delete
+          
+          # Start services
+          systemctl start httpd 2>/dev/null || true
+          systemctl start nginx 2>/dev/null || true
+          
+          echo "Maintenance completed at $(date)" >> /var/log/maintenance.log
+        dest: "{{ maintenance_script }}"
+        mode: '0755'
+        owner: root
+        group: root
+    
+    - name: Schedule maintenance for next Sunday at 2 AM
+      at:
+        command: "{{ maintenance_script }}"
+        count: 1
+        units: weeks
+        time: "02:00"
+        unique: yes
+    
+    - name: Schedule conditional task based on system load
+      at:
+        command: |
+          if [ $(uptime | awk '{print $10}' | cut -d',' -f1) -lt 1 ]; then
+            echo "System load is low, performing optimization" >> /var/log/optimization.log
+            nice -n 19 find / -name "*.tmp" -delete 2>/dev/null
+          fi
+        count: 30
+        units: minutes
+        unique: yes
