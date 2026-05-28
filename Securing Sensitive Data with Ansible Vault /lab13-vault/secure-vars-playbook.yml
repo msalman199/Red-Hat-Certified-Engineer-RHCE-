@@ -1,0 +1,20 @@
+---
+- name: Playbook with encrypted variables
+  hosts: localhost
+  vars:
+    username: admin
+    password: !vault |
+          $ANSIBLE_VAULT;1.1;AES256
+          66386439653762336464626431626336396665663135363834643766386435626436396662313161
+          3334633437303366366439326138316464376266323137650a626438346336643965386639323937
+          63393265633831303264626266653864643835383564373334616263396330643832663062653834
+          6664656264373765650a373936323837303739323835643765643966643439653838623939653939
+          3739
+  tasks:
+    - name: Display username (safe to show)
+      debug:
+        msg: "Username: {{ username }}"
+    
+    - name: Use password securely (won't display actual value)
+      debug:
+        msg: "Password is configured"
