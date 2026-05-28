@@ -1,0 +1,43 @@
+---
+- name: Manage Users with Encrypted Passwords
+  hosts: localhost
+  become: yes
+  vars_files:
+    - user-secrets.yml
+  tasks:
+    - name: Create user groups
+      group:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - developers
+        - admins
+        - users
+    
+    - name: Create regular users with encrypted passwords
+      user:
+        name: "{{ item.name }}"
+        password: "{{ item.password | password_hash('sha512') }}"
+        groups: "{{ item.groups }}"
+        shell: /bin/bash
+        create_home: yes
+        state: present
+      loop: "{{ users }}"
+      no_log: true  # Prevents passwords from appearing in logs
+    
+    - name: Create service accounts
+      user:
+        name: "{{ item.name }}"
+        password: "{{ item.password | password_hash('sha512') }}"
+        home: "{{ item.home }}"
+        shell: /bin/bash
+        system: yes
+        create_home: yes
+        state: present
+      loop: "{{ service_accounts }}"
+      no_log: true
+    
+    - name: Display created users (without sensitive data)
+      debug:
+        msg: "Created user: {{ item.name }} with groups: {{ item.groups | join(', ') }}"
+      loop: "{{ users }}"
