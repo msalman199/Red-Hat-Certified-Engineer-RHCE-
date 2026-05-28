@@ -1,0 +1,40 @@
+# Logrotate configuration - Managed by Ansible
+
+# Global options
+weekly
+rotate 4
+create
+dateext
+compress
+
+# Include configuration files from logrotate.d directory
+include /etc/logrotate.d
+
+# System-specific logs
+/var/log/wtmp {
+    monthly
+    create 0664 root utmp
+    minsize 1M
+    rotate 1
+}
+
+/var/log/btmp {
+    missingok
+    monthly
+    create 0600 root utmp
+    rotate 1
+}
+
+# RPM packages drop log rotation information into this directory
+include /etc/logrotate.d
+
+# Specific configurations for different host types
+{% if inventory_hostname in groups['logging_servers'] %}
+# Central server specific settings
+# Handle large volumes of logs with more aggressive rotation
+{% endif %}
+
+{% if inventory_hostname in groups['log_clients'] %}
+# Client specific settings
+# Less aggressive rotation since logs are forwarded
+{% endif %}
