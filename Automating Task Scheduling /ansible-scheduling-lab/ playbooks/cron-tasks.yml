@@ -1,0 +1,42 @@
+---
+- name: Automate Cron Job Scheduling
+  hosts: all
+  become: yes
+  vars:
+    log_directory: /var/log/automated-tasks
+    
+  tasks:
+    - name: Ensure log directory exists
+      file:
+        path: "{{ log_directory }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+    
+    - name: Schedule daily system cleanup
+      cron:
+        name: "Daily system cleanup"
+        minute: "0"
+        hour: "2"
+        job: "find /tmp -type f -mtime +7 -delete >> {{ log_directory }}/cleanup.log 2>&1"
+        user: root
+        state: present
+    
+    - name: Schedule weekly log rotation check
+      cron:
+        name: "Weekly log rotation check"
+        minute: "30"
+        hour: "1"
+        weekday: "0"
+        job: "logrotate -f /etc/logrotate.conf >> {{ log_directory }}/logrotate.log 2>&1"
+        user: root
+        state: present
+    
+    - name: Schedule disk usage monitoring
+      cron:
+        name: "Disk usage monitoring"
+        minute: "*/30"
+        job: "df -h | grep -E '(8[0-9]|9[0-9])%' >> {{ log_directory }}/disk-usage.log"
+        user: root
+        state: present
