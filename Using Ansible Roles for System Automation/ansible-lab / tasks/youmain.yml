@@ -1,0 +1,75 @@
+---
+# Main tasks for file management role
+- name: Create directories
+  file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner | default(default_file_owner) }}"
+    group: "{{ item.group | default(default_file_group) }}"
+    mode: "{{ item.mode | default(default_dir_mode) }}"
+    recurse: "{{ item.recurse | default(false) }}"
+  loop: "{{ directories_to_create }}"
+  when: directories_to_create is defined
+  become: true
+
+- name: Create files from templates
+  template:
+    src: "{{ item.template }}"
+    dest: "{{ item.dest }}"
+    owner: "{{ item.owner | default(default_file_owner) }}"
+    group: "{{ item.group | default(default_file_group) }}"
+    mode: "{{ item.mode | default(default_file_mode) }}"
+    backup: "{{ backup_existing | bool }}"
+  loop: "{{ files_to_create }}"
+  when: 
+    - files_to_create is defined
+    - item.template is defined
+  become: true
+
+- name: Create files with content
+  copy:
+    content: "{{ item.content }}"
+    dest: "{{ item.dest }}"
+    owner: "{{ item.owner | default(default_file_owner) }}"
+    group: "{{ item.group | default(default_file_group) }}"
+    mode: "{{ item.mode | default(default_file_mode) }}"
+    backup: "{{ backup_existing | bool }}"
+  loop: "{{ files_to_create }}"
+  when: 
+    - files_to_create is defined
+    - item.content is defined
+  become: true
+
+- name: Copy static files
+  copy:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: "{{ item.owner | default(default_file_owner) }}"
+    group: "{{ item.group | default(default_file_group) }}"
+    mode: "{{ item.mode | default(default_file_mode) }}"
+    backup: "{{ backup_existing | bool }}"
+  loop: "{{ files_to_create }}"
+  when: 
+    - files_to_create is defined
+    - item.src is defined
+  become: true
+
+- name: Remove unwanted files
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop: "{{ files_to_remove }}"
+  when: files_to_remove is defined
+  become: true
+
+- name: Set file permissions
+  file:
+    path: "{{ item.path }}"
+    owner: "{{ item.owner | default(default_file_owner) }}"
+    group: "{{ item.group | default(default_file_group) }}"
+    mode: "{{ item.mode | default(default_file_mode) }}"
+  loop: "{{ files_to_create }}"
+  when: 
+    - files_to_create is defined
+    - item.path is defined
+  become: true
