@@ -1,0 +1,18 @@
+namespace: myorg
+name: system_roles
+version: 1.0.0
+readme: README.md
+authors:
+  - Your Name <your.email@example.com>
+description: Collection of system administration roles
+license:
+  - MIT
+tags:
+  - system
+  - automation
+  - configuration
+dependencies: {}
+repository: https://github.com/yourorg/system_roles
+documentation: https://github.com/yourorg/system_roles
+homepage: https://github.com/yourorg/system_roles
+issues: https://github.com/yourorg/system_roles/issues
