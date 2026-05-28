@@ -1,0 +1,42 @@
+---
+- name: Conditional Role Execution
+  hosts: all
+  become: true
+  gather_facts: true
+  
+  vars:
+    install_web_server: true
+    manage_users: true
+    configure_firewall: false
+  
+  roles:
+    - role: user_management
+      when: manage_users | bool
+      
+    - role: service_config
+      when: install_web_server | bool
+      vars:
+        services_to_manage:
+          - name: httpd
+            package: httpd
+            state: started
+            enabled: true
+    
+    - role: file_management
+      when: install_web_server | bool
+      vars:
+        files_to_create:
+          - dest: /var/www/html/index.html
+            content: |
+              <h1>Server: {{ inventory_hostname }}</h1>
+              <p>OS: {{ ansible_distribution }} {{ ansible_distribution_version }}</p>
+              <p>Configured: {{ ansible_date_time.date }}</p>
+
+  post_tasks:
+    - name: Display configuration summary
+      debug:
+        msg: |
+          Configuration Summary:
+          - Web server installed: {{ install_web_server }}
+          - Users managed: {{ manage_users }}
+          - Firewall configured: {{ configure_firewall }}
