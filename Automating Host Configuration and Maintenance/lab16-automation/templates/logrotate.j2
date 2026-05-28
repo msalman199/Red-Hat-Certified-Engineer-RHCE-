@@ -1,0 +1,20 @@
+{{ item.path }} {
+    {{ item.frequency }}
+    rotate {{ item.rotate }}
+{% if item.compress %}
+    compress
+{% endif %}
+{% if item.delaycompress %}
+    delaycompress
+{% endif %}
+{% if item.missingok %}
+    missingok
+{% endif %}
+{% if item.notifempty %}
+    notifempty
+{% endif %}
+    create 0644 root root
+    postrotate
+        /bin/systemctl reload rsyslog > /dev/null 2>&1 || true
+    endscript
+}
