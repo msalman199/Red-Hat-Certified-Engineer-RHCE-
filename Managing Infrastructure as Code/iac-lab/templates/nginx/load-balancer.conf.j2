@@ -1,0 +1,39 @@
+upstream {{ app_name }}_backend {
+    {% for server in backend_servers %}
+    server {{ server.ip }}:{{ server.port }} weight={{ server.weight }};
+    {% endfor %}
+}
+
+server {
+    listen {{ web_server_port }};
+    server_name {{ inventory_hostname }}.{{ project_name }}.local;
+    
+    # Load balancing configuration
+    location / {
+        proxy_pass http://{{ app_name }}_backend;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # Health check settings
+        proxy_connect_timeout {{ lb_timeout }}s;
+        proxy_send_timeout {{ lb_timeout }}s;
+        proxy_read_timeout {{ lb_timeout }}s;
+    }
+    
+    # Health check endpoint
+    location /health {
+        access_log off;
+        return 200 "healthy\n";
+        add_header Content-Type text/plain;
+    }
+    
+    {% if ssl_enabled %}
+    # SSL Configuration
+    listen {{ web_server_ssl_port }} ssl;
+    ssl_certificate {{ ssl_cert_path }}/{{ inventory_hostname }}.crt;
+    ssl_certificate_key {{ ssl_key_path }}/{{ inventory_hostname }}.key;
+    ssl_protocols {{ ssl_protocols }};
+    {% endif %}
+}
