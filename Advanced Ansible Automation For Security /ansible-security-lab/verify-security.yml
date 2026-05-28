@@ -1,0 +1,49 @@
+---
+- name: Verify Security Configuration
+  hosts: all
+  become: yes
+  
+  tasks:
+    - name: Check SELinux status
+      command: sestatus
+      register: selinux_check
+      changed_when: false
+
+    - name: Verify firewall status
+      command: firewall-cmd --state
+      register: firewall_check
+      changed_when: false
+
+    - name: Check active firewall zones
+      command: firewall-cmd --get-active-zones
+      register: zones_check
+      changed_when: false
+
+    - name: Verify SSH configuration
+      command: sshd -T
+      register: ssh_check
+      changed_when: false
+
+    - name: Check audit daemon status
+      command: systemctl is-active auditd
+      register: audit_check
+      changed_when: false
+
+    - name: Verify fail2ban status
+      command: systemctl is-active fail2ban
+      register: fail2ban_check
+      changed_when: false
+
+    - name: Check user accounts
+      command: getent passwd
+      register: users_check
+      changed_when: false
+
+    - name: Display verification results
+      debug:
+        msg:
+          - "SELinux Status: {{ selinux_check.stdout }}"
+          - "Firewall Status: {{ firewall_check.stdout }}"
+          - "Active Zones: {{ zones_check.stdout }}"
+          - "Audit Status: {{ audit_check.stdout }}"
+          - "Fail2ban Status: {{ fail2ban_check.stdout }}"
