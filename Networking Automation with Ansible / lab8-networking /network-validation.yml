@@ -1,0 +1,96 @@
+---
+- name: Comprehensive Network and Firewall Validation
+  hosts: all
+  become: yes
+  gather_facts: yes
+  
+  tasks:
+    - name: Test connectivity to external hosts
+      ping:
+        data: google.com
+      register: external_ping
+      ignore_errors: yes
+    
+    - name: Test connectivity between managed hosts
+      ping:
+        data: "{{ hostvars[item]['ansible_host'] }}"
+      loop: "{{ groups['all'] }}"
+      when: item != inventory_hostname
+      register: internal_ping
+      ignore_errors: yes
+    
+    - name: Check network interface status
+      command: nmcli device status
+      register: device_status
+    
+    - name: Display network device status
+      debug:
+        msg: "{{ device_status.stdout_lines }}"
+    
+    - name: Verify IP configuration with nmcli
+      command: nmcli connection show "System eth0"
+      register: connection_details
+    
+    - name: Display connection details
+      debug:
+        msg: "{{ connection_details.stdout_lines }}"
+    
+    - name: Check firewall status
+      command: firewall-cmd --state
+      register: firewall_status
+    
+    - name: Display firewall status
+      debug:
+        msg: "Firewall Status: {{ firewall_status.stdout }}"
+    
+    - name: List active firewall zones
+      command: firewall-cmd --get-active-zones
+      register: active_zones
+    
+    - name: Display active zones
+      debug:
+        msg: "{{ active_zones.stdout_lines }}"
+    
+    - name: List allowed services in public zone
+      command: firewall-cmd --zone=public --list-services
+      register: public_services
+    
+    - name: Display allowed services
+      debug:
+        msg: "Public Zone Services: {{ public_services.stdout }}"
+    
+    - name: List allowed ports in public zone
+      command: firewall-cmd --zone=public --list-ports
+      register: public_ports
+    
+    - name: Display allowed ports
+      debug:
+        msg: "Public Zone Ports: {{ public_ports.stdout }}"
+    
+    - name: Test specific port connectivity
+      wait_for:
+        host: "{{ ansible_host }}"
+        port: 22
+        timeout: 5
+      delegate_to: localhost
+      register: ssh_connectivity
+      ignore_errors: yes
+    
+    - name: Display connectivity test results
+      debug:
+        msg: "SSH Connectivity: {{ 'SUCCESS' if ssh_connectivity is succeeded else 'FAILED' }}"
+    
+    - name: Generate network summary report
+      debug:
+        msg: |
+          =================================
+          NETWORK CONFIGURATION SUMMARY
+          =================================
+          Hostname: {{ ansible_hostname }}
+          IP Address: {{ ansible_default_ipv4.address }}
+          Gateway: {{ ansible_default_ipv4.gateway }}
+          DNS Servers: {{ ansible_dns.nameservers | join(', ') }}
+          Network Interface: {{ ansible_default_ipv4.interface }}
+          Firewall Status: {{ firewall_status.stdout }}
+          External Connectivity: {{ 'SUCCESS' if external_ping is succeeded else 'FAILED' }}
+          =================================
