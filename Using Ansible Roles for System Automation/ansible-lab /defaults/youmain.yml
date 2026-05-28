@@ -1,0 +1,10 @@
+---
+# Default variables for file management role
+directories_to_create: []
+files_to_create: []
+files_to_remove: []
+default_file_owner: root
+default_file_group: root
+default_file_mode: '0644'
+default_dir_mode: '0755'
+backup_existing: true
