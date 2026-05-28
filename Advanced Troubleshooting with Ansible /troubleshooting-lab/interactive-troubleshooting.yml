@@ -1,0 +1,59 @@
+---
+- name: Interactive Troubleshooting Session
+  hosts: webservers
+  become: yes
+  
+  tasks:
+    - name: Check system resources
+      shell: |
+        echo "=== SYSTEM RESOURCES ==="
+        free -h
+        echo ""
+        echo "=== DISK USAGE ==="
+        df -h
+        echo ""
+        echo "=== LOAD AVERAGE ==="
+        uptime
+      register: system_check
+      
+    - name: Display system information
+      debug:
+        var: system_check.stdout_lines
+        
+    - name: Check for running services
+      shell: systemctl list-units --type=service --state=running | head -10
+      register: running_services
+      
+    - name: Display running services
+      debug:
+        var: running_services.stdout_lines
+        
+    - name: Check network connectivity
+      shell: |
+        echo "=== NETWORK INTERFACES ==="
+        ip addr show | grep -E "^[0-9]+:|inet "
+        echo ""
+        echo "=== ROUTING TABLE ==="
+        ip route
+      register: network_check
+      
+    - name: Display network information
+      debug:
+        var: network_check.stdout_lines
+        
+    - name: Check log files for errors
+      shell: |
+        echo "=== RECENT SYSTEM ERRORS ==="
+        journalctl --since "1 hour ago" --priority=err --no-pager | tail -10
+      register: error_check
+      ignore_errors: yes
+      
+    - name: Display recent errors
+      debug:
+        var: error_check.stdout_lines
+      when: error_check.stdout_lines | length > 0
+      
+    - name: No recent errors found
+      debug:
+        msg: "No recent system errors found in the last hour"
+      when: error_check.stdout_lines | length == 0
