@@ -1,0 +1,17 @@
+---
+# Database configuration
+db_engine: "mysql"
+db_version: "8.0"
+db_port: 3306
+db_name: "application_db"
+db_user: "app_user"
+db_password: "SecurePassword123!"
+
+# Performance settings
+max_connections: 200
+innodb_buffer_pool_size: "1G"
+query_cache_size: "256M"
+
+# Backup settings
+db_backup_enabled: true
+db_backup_schedule: "0 2 * * *"  # Daily at 2 AM
