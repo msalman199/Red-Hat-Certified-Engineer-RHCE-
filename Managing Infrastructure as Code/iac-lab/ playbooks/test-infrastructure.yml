@@ -1,0 +1,32 @@
+---
+- name: Test Infrastructure Deployment
+  hosts: all
+  gather_facts: yes
+  
+  tasks:
+    - name: Check if servers are reachable
+      ping:
+    
+    - name: Verify system uptime
+      command: uptime
+      register: uptime_result
+    
+    - name: Display uptime
+      debug:
+        msg: "{{ inventory_hostname }} uptime: {{ uptime_result.stdout }}"
+
+- name: Test Web Servers
+  hosts: webservers
+  
+  tasks:
+    - name: Check if Apache is running
+      systemd:
+        name: apache2
+      register: apache_status
+    
+    - name: Verify Apache is active
+      assert:
+        that:
+          - apache_status.status.ActiveState == "active"
+        fail_msg: "Apache is not running on {{ inventory_hostname }}"
+        success_msg: "Apache is running correctly on {{ inventory_hostname }}"
