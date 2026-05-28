@@ -1,0 +1,32 @@
+<VirtualHost *:{{ web_server_port }}>
+    ServerName {{ inventory_hostname }}.{{ project_name }}.local
+    ServerAlias {{ inventory_hostname }}
+    DocumentRoot /var/www/html/{{ app_name }}
+    
+    # Logging
+    ErrorLog ${APACHE_LOG_DIR}/{{ app_name }}_error.log
+    CustomLog ${APACHE_LOG_DIR}/{{ app_name }}_access.log combined
+    
+    # Security headers
+    Header always set X-Content-Type-Options nosniff
+    Header always set X-Frame-Options DENY
+    Header always set X-XSS-Protection "1; mode=block"
+    
+    # Application specific settings
+    <Directory /var/www/html/{{ app_name }}>
+        Options -Indexes +FollowSymLinks
+        AllowOverride All
+        Require all granted
+    </Directory>
+    
+    # Performance settings
+    MaxRequestWorkers {{ max_connections }}
+    
+    {% if ssl_enabled %}
+    # SSL Configuration
+    SSLEngine on
+    SSLCertificateFile {{ ssl_cert_path }}/{{ inventory_hostname }}.crt
+    SSLCertificateKeyFile {{ ssl_key_path }}/{{ inventory_hostname }}.key
+    SSLProtocol all -SSLv2 -SSLv3
+    {% endif %}
+</VirtualHost>
