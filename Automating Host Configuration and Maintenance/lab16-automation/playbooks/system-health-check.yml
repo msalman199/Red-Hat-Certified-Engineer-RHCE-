@@ -1,0 +1,93 @@
+---
+- name: System Health Monitoring and Reporting
+  hosts: all
+  become: yes
+  vars:
+    health_check_dir: /var/log/health-checks
+    disk_usage_threshold: 80
+    memory_usage_threshold: 85
+    load_average_threshold: 2.0
+    
+  tasks:
+    - name: Create health check directory
+      file:
+        path: "{{ health_check_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+    
+    - name: Gather system facts
+      setup:
+    
+    - name: Check disk usage
+      shell: df -h | awk 'NR>1 {print $5 " " $6}' | sed 's/%//'
+      register: disk_usage
+      changed_when: false
+    
+    - name: Check memory usage
+      shell: free | grep Mem | awk '{printf "%.2f", ($3/$2) * 100.0}'
+      register: memory_usage
+      changed_when: false
+    
+    - name: Check load average
+      shell: uptime | awk -F'load average:' '{print $2}' | awk '{print $1}' | sed 's/,//'
+      register: load_average
+      changed_when: false
+    
+    - name: Check service status
+      systemd:
+        name: "{{ item }}"
+      register: service_status
+      loop:
+        - sshd
+        - chronyd
+        - httpd
+      ignore_errors: yes
+    
+    - name: Check for failed systemd services
+      shell: systemctl --failed --no-legend | wc -l
+      register: failed_services_count
+      changed_when: false
+    
+    - name: Generate health report
+      template:
+        src: health-report.j2
+        dest: "{{ health_check_dir }}/health-report-{{ ansible_date_time.epoch }}.txt"
+        owner: root
+        group: root
+        mode: '0644'
+    
+    - name: Check for critical issues
+      set_fact:
+        critical_issues: []
+    
+    - name: Add disk usage warnings
+      set_fact:
+        critical_issues: "{{ critical_issues + ['High disk usage on ' + item.split()[1] + ': ' + item.split()[0] + '%'] }}"
+      loop: "{{ disk_usage.stdout_lines }}"
+      when: item.split()[0] | int > disk_usage_threshold
+    
+    - name: Add memory usage warning
+      set_fact:
+        critical_issues: "{{ critical_issues + ['High memory usage: ' + memory_usage.stdout + '%'] }}"
+      when: memory_usage.stdout | float > memory_usage_threshold
+    
+    - name: Add load average warning
+      set_fact:
+        critical_issues: "{{ critical_issues + ['High load average: ' + load_average.stdout] }}"
+      when: load_average.stdout | float > load_average_threshold
+    
+    - name: Display critical issues
+      debug:
+        msg: "CRITICAL ISSUES FOUND: {{ critical_issues }}"
+      when: critical_issues | length > 0
+    
+    - name: Send alert if critical issues found
+      mail:
+        to: admin@example.com
+        subject: "Critical System Issues on {{ ansible_hostname }}"
+        body: "The following critical issues were found:\n{{ critical_issues | join('\n') }}"
+      when: 
+        - critical_issues | length > 0
+        - false  # Set to true to enable email alerts
