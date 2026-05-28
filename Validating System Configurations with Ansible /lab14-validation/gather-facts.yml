@@ -1,0 +1,25 @@
+---
+- name: Gather and Display Disk Facts
+  hosts: all
+  gather_facts: yes
+  tasks:
+    - name: Display all disk-related facts
+      debug:
+        msg: |
+          Hostname: {{ ansible_hostname }}
+          Total Memory: {{ ansible_memtotal_mb }} MB
+          Available Disk Space: {{ ansible_mounts }}
+          Architecture: {{ ansible_architecture }}
+          OS Family: {{ ansible_os_family }}
+          
+    - name: Show specific mount point information
+      debug:
+        msg: |
+          Mount Point: {{ item.mount }}
+          Device: {{ item.device }}
+          Filesystem: {{ item.fstype }}
+          Size: {{ item.size_total | human_readable }}
+          Available: {{ item.size_available | human_readable }}
+          Used: {{ ((item.size_total - item.size_available) / item.size_total * 100) | round(2) }}%
+      loop: "{{ ansible_mounts }}"
+      when: item.mount == "/"
