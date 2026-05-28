@@ -1,0 +1,95 @@
+---
+- name: Automated Package Updates with Safety Checks
+  hosts: all
+  become: yes
+  vars:
+    update_strategy: security  # Options: all, security, minimal
+    reboot_required_file: /var/run/reboot-required
+    backup_dir: /backup/pre-update
+    
+  tasks:
+    - name: Create backup directory
+      file:
+        path: "{{ backup_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+    
+    - name: Backup current package list
+      shell: |
+        rpm -qa > {{ backup_dir }}/packages-before-update-{{ ansible_date_time.epoch }}.txt
+      when: ansible_os_family == "RedHat"
+    
+    - name: Check available updates
+      yum:
+        list: updates
+      register: available_updates
+      when: ansible_os_family == "RedHat"
+    
+    - name: Display available updates count
+      debug:
+        msg: "{{ available_updates.results | length }} updates available"
+      when: ansible_os_family == "RedHat"
+    
+    - name: Apply security updates only
+      yum:
+        name: "*"
+        state: latest
+        security: yes
+        update_only: yes
+      when: 
+        - ansible_os_family == "RedHat"
+        - update_strategy == "security"
+      register: security_updates
+    
+    - name: Apply all updates
+      yum:
+        name: "*"
+        state: latest
+        update_only: yes
+      when: 
+        - ansible_os_family == "RedHat"
+        - update_strategy == "all"
+      register: all_updates
+    
+    - name: Check if reboot is required (RHEL/CentOS)
+      stat:
+        path: /var/run/reboot-required
+      register: reboot_required_rhel
+      when: ansible_os_family == "RedHat"
+    
+    - name: Check for kernel updates requiring reboot
+      shell: |
+        if [ "$(rpm -q kernel --last | head -n1 | cut -d' ' -f1)" != "$(uname -r | sed 's/-/_/g')" ]; then
+          echo "reboot_needed"
+        else
+          echo "no_reboot_needed"
+        fi
+      register: kernel_check
+      changed_when: false
+      when: ansible_os_family == "RedHat"
+    
+    - name: Create reboot indicator file
+      file:
+        path: "{{ reboot_required_file }}"
+        state: touch
+        owner: root
+        group: root
+        mode: '0644'
+      when: 
+        - kernel_check is defined
+        - kernel_check.stdout == "reboot_needed"
+    
+    - name: Generate update report
+      template:
+        src: update-report.j2
+        dest: "/var/log/update-report-{{ ansible_date_time.epoch }}.txt"
+        owner: root
+        group: root
+        mode: '0644'
+    
+    - name: Clean package cache
+      yum:
+        autoremove: yes
+      when: ansible_os_family == "RedHat"
