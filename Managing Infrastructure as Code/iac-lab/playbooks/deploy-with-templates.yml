@@ -1,0 +1,187 @@
+---
+- name: Deploy Infrastructure with Templates and Variables
+  hosts: all
+  become: yes
+  gather_facts: yes
+  
+  tasks:
+    - name: Update system packages
+      apt:
+        update_cache: yes
+        upgrade: dist
+        cache_valid_time: 3600
+      when: ansible_os_family == "Debian"
+    
+    - name: Install common packages
+      apt:
+        name: "{{ common_packages }}"
+        state: present
+      when: ansible_os_family == "Debian"
+    
+    - name: Create project directory
+      file:
+        path: "/opt/{{ project_name }}"
+        state: directory
+        mode: '0755'
+    
+    - name: Generate server information file
+      template:
+        src: server-info.txt.j2
+        dest: "/opt/{{ project_name }}/server-info.txt"
+        mode: '0644'
+
+- name: Configure Web Servers with Templates
+  hosts: webservers
+  become: yes
+  
+  tasks:
+    - name: Install web server
+      apt:
+        name: "{{ web_server_package }}"
+        state: present
+    
+    - name: Install additional Apache modules
+      apt:
+        name:
+          - libapache2-mod-ssl
+          - libapache2-mod-headers
+        state: present
+      when: web_server_package == "apache2"
+    
+    - name: Enable Apache modules
+      apache2_module:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - ssl
+        - headers
+        - rewrite
+      when: web_server_package == "apache2"
+      notify: restart apache
+    
+    - name: Create application directory
+      file:
+        path: "/var/www/html/{{ app_name }}"
+        state: directory
+        owner: www-data
+        group: www-data
+        mode: '0755'
+    
+    - name: Deploy Apache virtual host configuration
+      template:
+        src: apache/vhost.conf.j2
+        dest: "/etc/apache2/sites-available/{{ app_name }}.conf"
+        backup: yes
+      when: web_server_package == "apache2"
+      notify: restart apache
+    
+    - name: Enable Apache virtual host
+      command: a2ensite {{ app_name }}.conf
+      when: web_server_package == "apache2"
+      notify: restart apache
+    
+    - name: Create sample application file
+      template:
+        src: index.html.j2
+        dest: "/var/www/html/{{ app_name }}/index.html"
+        owner: www-data
+        group: www-data
+        mode: '0644'
+    
+    - name: Start and enable web server service
+      systemd:
+        name: "{{ web_server_service }}"
+        state: started
+        enabled: yes
+
+- name: Configure Database Servers with Templates
+  hosts: databases
+  become: yes
+  
+  tasks:
+    - name: Install MySQL server
+      apt:
+        name:
+          - mysql-server
+          - python3-pymysql
+        state: present
+    
+    - name: Deploy MySQL configuration
+      template:
+        src: mysql/my.cnf.j2
+        dest: /etc/mysql/mysql.conf.d/custom.cnf
+        backup: yes
+      notify: restart mysql
+    
+    - name: Start and enable MySQL service
+      systemd:
+        name: mysql
+        state: started
+        enabled: yes
+    
+    - name: Create application database
+      mysql_db:
+        name: "{{ db_name }}"
+        state: present
+        login_unix_socket: /var/run/mysqld/mysqld.sock
+    
+    - name: Create database user
+      mysql_user:
+        name: "{{ db_user }}"
+        password: "{{ db_password }}"
+        priv: "{{ db_name }}.*:ALL"
+        host: "192.168.1.%"
+        state: present
+        login_unix_socket: /var/run/mysqld/mysqld.sock
+
+- name: Configure Load Balancer with Templates
+  hosts: loadbalancers
+  become: yes
+  
+  tasks:
+    - name: Install Nginx
+      apt:
+        name: nginx
+        state: present
+    
+    - name: Deploy Nginx load balancer configuration
+      template:
+        src: nginx/load-balancer.conf.j2
+        dest: "/etc/nginx/sites-available/{{ app_name }}-lb"
+        backup: yes
+      notify: restart nginx
+    
+    - name: Enable Nginx site
+      file:
+        src: "/etc/nginx/sites-available/{{ app_name }}-lb"
+        dest: "/etc/nginx/sites-enabled/{{ app_name }}-lb"
+        state: link
+      notify: restart nginx
+    
+    - name: Remove default Nginx site
+      file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+      notify: restart nginx
+    
+    - name: Start and enable Nginx service
+      systemd:
+        name: nginx
+        state: started
+        enabled: yes
+  
+  handlers:
+    - name: restart apache
+      systemd:
+        name: apache2
+        state: restarted
+    
+    - name: restart mysql
+      systemd:
+        name: mysql
+        state: restarted
+    
+    - name: restart nginx
+      systemd:
+        name: nginx
+        state: restarted
