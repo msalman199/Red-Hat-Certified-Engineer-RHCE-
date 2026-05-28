@@ -1,0 +1,35 @@
+<VirtualHost *:{{ web_server_port }}>
+    ServerName {{ server_name }}
+    DocumentRoot {{ document_root }}
+    
+    # Environment: {{ environment_name }}
+    
+    <Directory {{ document_root }}>
+        Options {% if debug_mode | default(false) %}Indexes {% endif %}FollowSymLinks
+        AllowOverride All
+        Require all granted
+    </Directory>
+    
+    # Performance tuning based on environment
+    MaxRequestWorkers {{ max_connections }}
+    KeepAlive On
+    KeepAliveTimeout {{ keepalive_timeout | default(60) }}
+    
+    {% if security_headers | default(false) %}
+    # Security headers
+    Header always set X-Content-Type-Options nosniff
+    Header always set X-Frame-Options DENY
+    Header always set X-XSS-Protection "1; mode=block"
+    Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    {% endif %}
+    
+    # Logging configuration
+    ErrorLog ${APACHE_LOG_DIR}/{{ server_name }}_error.log
+    CustomLog ${APACHE_LOG_DIR}/{{ server_name }}_access.log combined
+    LogLevel {{ log_level | default('warn') }}
+    
+    {% if debug_mode | default(false) %}
+    # Debug mode - additional logging
+    LogLevel info rewrite:trace3
+    {% endif %}
+</VirtualHost>
