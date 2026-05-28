@@ -1,0 +1,64 @@
+---
+- name: Provision Cloud Infrastructure
+  hosts: localhost
+  connection: local
+  gather_facts: no
+  
+  vars:
+    cloud_resources:
+      - name: "web-server-1"
+        type: "compute"
+        size: "medium"
+        os: "ubuntu-20.04"
+        region: "us-east-1"
+      - name: "web-server-2"
+        type: "compute"
+        size: "medium"
+        os: "ubuntu-20.04"
+        region: "us-east-1"
+      - name: "database-server"
+        type: "compute"
+        size: "large"
+        os: "ubuntu-20.04"
+        region: "us-east-1"
+      - name: "load-balancer"
+        type: "compute"
+        size: "small"
+        os: "ubuntu-20.04"
+        region: "us-east-1"
+  
+  tasks:
+    - name: Create resource provisioning log directory
+      file:
+        path: /tmp/cloud-provisioning
+        state: directory
+        mode: '0755'
+    
+    - name: Simulate cloud resource provisioning
+      shell: |
+        echo "Provisioning {{ item.name }}..."
+        echo "Type: {{ item.type }}"
+        echo "Size: {{ item.size }}"
+        echo "OS: {{ item.os }}"
+        echo "Region: {{ item.region }}"
+        echo "Status: Provisioned at $(date)"
+        echo "---"
+      loop: "{{ cloud_resources }}"
+      register: provisioning_results
+    
+    - name: Save provisioning results to file
+      copy:
+        content: |
+          Cloud Infrastructure Provisioning Report
+          Generated: {{ ansible_date_time.iso8601 }}
+          
+          {% for result in provisioning_results.results %}
+          {{ result.stdout }}
+          {% endfor %}
+        dest: "/tmp/cloud-provisioning/provisioning-report-{{ ansible_date_time.epoch }}.txt"
+    
+    - name: Display provisioning summary
+      debug:
+        msg: |
+          Successfully simulated provisioning of {{ cloud_resources | length }} resources.
+          Report saved to: /tmp/cloud-provisioning/provisioning-report-{{ ansible_date_time.epoch }}.txt
