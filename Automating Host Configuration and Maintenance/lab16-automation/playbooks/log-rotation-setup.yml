@@ -1,0 +1,66 @@
+---
+- name: Configure Log Rotation
+  hosts: all
+  become: yes
+  vars:
+    custom_log_configs:
+      - name: application-logs
+        path: /var/log/myapp/*.log
+        frequency: daily
+        rotate: 30
+        compress: yes
+        delaycompress: yes
+        missingok: yes
+        notifempty: yes
+      
+      - name: system-logs
+        path: /var/log/messages /var/log/secure
+        frequency: weekly
+        rotate: 4
+        compress: yes
+        delaycompress: yes
+        missingok: yes
+        notifempty: yes
+  
+  tasks:
+    - name: Ensure logrotate is installed
+      yum:
+        name: logrotate
+        state: present
+      when: ansible_os_family == "RedHat"
+    
+    - name: Create custom log directories
+      file:
+        path: /var/log/myapp
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+    
+    - name: Create sample application log
+      copy:
+        content: |
+          {{ ansible_date_time.iso8601 }} - Sample application log entry
+          {{ ansible_date_time.iso8601 }} - Application started successfully
+        dest: /var/log/myapp/app.log
+        owner: root
+        group: root
+        mode: '0644'
+    
+    - name: Configure custom log rotation
+      template:
+        src: logrotate.j2
+        dest: "/etc/logrotate.d/{{ item.name }}"
+        owner: root
+        group: root
+        mode: '0644'
+      loop: "{{ custom_log_configs }}"
+    
+    - name: Test logrotate configuration
+      command: logrotate -d /etc/logrotate.conf
+      register: logrotate_test
+      changed_when: false
+    
+    - name: Display logrotate test results
+      debug:
+        var: logrotate_test.stdout_lines
