@@ -1,0 +1,103 @@
+---
+- name: Configure Firewall Rules with firewalld
+  hosts: all
+  become: yes
+  
+  tasks:
+    - name: Ensure firewalld is installed
+      package:
+        name: firewalld
+        state: present
+    
+    - name: Start and enable firewalld service
+      systemd:
+        name: firewalld
+        state: started
+        enabled: yes
+    
+    - name: Configure firewall for web server
+      block:
+        - name: Allow HTTP traffic
+          firewalld:
+            service: http
+            permanent: yes
+            state: enabled
+            immediate: yes
+        
+        - name: Allow HTTPS traffic
+          firewalld:
+            service: https
+            permanent: yes
+            state: enabled
+            immediate: yes
+        
+        - name: Allow custom web port 8080
+          firewalld:
+            port: 8080/tcp
+            permanent: yes
+            state: enabled
+            immediate: yes
+        
+        - name: Allow SSH from specific subnet
+          firewalld:
+            rich_rule: 'rule family="ipv4" source address="192.168.1.0/24" service name="ssh" accept'
+            permanent: yes
+            state: enabled
+            immediate: yes
+      when: inventory_hostname == 'web-server'
+    
+    - name: Configure firewall for database server
+      block:
+        - name: Allow MySQL/MariaDB
+          firewalld:
+            service: mysql
+            permanent: yes
+            state: enabled
+            immediate: yes
+        
+        - name: Allow PostgreSQL
+          firewalld:
+            port: 5432/tcp
+            permanent: yes
+            state: enabled
+            immediate: yes
+        
+        - name: Allow database backup port
+          firewalld:
+            port: 3307/tcp
+            permanent: yes
+            state: enabled
+            immediate: yes
+            zone: internal
+        
+        - name: Restrict SSH to management network
+          firewalld:
+            rich_rule: 'rule family="ipv4" source address="192.168.1.10/32" service name="ssh" accept'
+            permanent: yes
+            state: enabled
+            immediate: yes
+      when: inventory_hostname == 'db-server'
+    
+    - name: Remove default SSH rule (if exists)
+      firewalld:
+        service: ssh
+        permanent: yes
+        state: disabled
+        immediate: yes
+      ignore_errors: yes
+    
+    - name: Set default zone to public
+      firewalld:
+        zone: public
+        interface: eth0
+        permanent: yes
+        immediate: yes
+        state: enabled
+    
+    - name: Enable logging for denied packets
+      firewalld:
+        zone: public
+        log_denied: all
+        permanent: yes
+        immediate: yes
+        state: enabled
