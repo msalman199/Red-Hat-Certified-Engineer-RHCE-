@@ -1,0 +1,99 @@
+---
+- name: Network Troubleshooting and Diagnostics
+  hosts: all
+  become: yes
+  
+  tasks:
+    - name: Collect system information
+      setup:
+        gather_subset:
+          - network
+          - hardware
+      register: system_facts
+    
+    - name: Check network service status
+      systemd:
+        name: "{{ item }}"
+      register: service_status
+      loop:
+        - NetworkManager
+        - firewalld
+        - systemd-resolved
+      ignore_errors: yes
+    
+    - name: Display service status
+      debug:
+        msg: "{{ item.item }}: {{ item.status.ActiveState if item.status is defined else 'Not Found' }}"
+      loop: "{{ service_status.results }}"
+    
+    - name: Check routing table
+      command: ip route show
+      register: routing_table
+    
+    - name: Display routing information
+      debug:
+        msg: "{{ routing_table.stdout_lines }}"
+    
+    - name: Check network statistics
+      command: ss -tuln
+      register: network_stats
+    
+    - name: Display listening ports
+      debug:
+        msg: "{{ network_stats.stdout_lines }}"
+    
+    - name: Check firewall rules
+      command: firewall-cmd --list-all
+      register: firewall_rules
+    
+    - name: Display firewall configuration
+      debug:
+        msg: "{{ firewall_rules.stdout_lines }}"
+    
+    - name: Test connectivity to critical services
+      uri:
+        url: "http://{{ item }}"
+        method: GET
+        timeout: 5
+      loop:
+        - "httpbin.org/get"
+      register: connectivity_test
+      ignore_errors: yes
+    
+    - name: Generate troubleshooting report
+      copy:
+        content: |
+          Network Troubleshooting Report
+          Generated: {{ ansible_date_time.iso8601 }}
+          Host: {{ inventory_hostname }}
+          
+          System Information:
+          - OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
+          - Kernel: {{ ansible_kernel }}
+          - Architecture: {{ ansible_architecture }}
+          
+          Network Configuration:
+          - Primary IP: {{ ansible_default_ipv4.address }}
+          - Gateway: {{ ansible_default_ipv4.gateway }}
+          - Interface: {{ ansible_default_ipv4.interface }}
+          - DNS Servers: {{ ansible_dns.nameservers | join(', ') }}
+          
+          Service Status:
+          {% for service in service_status.results %}
+          - {{ service.item }}: {{ service.status.ActiveState if service.status is defined else 'Not Found' }}
+          {% endfor %}
+          
+          Firewall Status:
+          {{ firewall_rules.stdout }}
+          
+          Routing Table:
+          {{ routing_table.stdout }}
+          
+        dest: "/tmp/network-report-{{ inventory_hostname }}.txt"
+        mode: '0644'
+    
+    - name: Fetch troubleshooting reports
+      fetch:
+        src: "/tmp/network-report-{{ inventory_hostname }}.txt"
+        dest: "./reports/"
+        flat: yes
