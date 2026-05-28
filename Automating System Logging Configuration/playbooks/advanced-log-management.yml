@@ -1,0 +1,126 @@
+---
+- name: Advanced Log Management and Monitoring
+  hosts: all
+  become: yes
+  vars:
+    log_alert_threshold: 80  # Percentage
+    log_partition: /var/log
+    
+  tasks:
+    - name: Install log analysis tools
+      package:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - logwatch
+        - mailx
+        - bc
+    
+    - name: Create log space monitoring script
+      copy:
+        content: |
+          #!/bin/bash
+          # Log space monitoring script
+          
+          THRESHOLD={{ log_alert_threshold }}
+          LOG_PARTITION="{{ log_partition }}"
+          HOSTNAME=$(hostname)
+          
+          # Get disk usage percentage
+          USAGE=$(df "$LOG_PARTITION" | awk 'NR==2 {print $5}' | sed 's/%//')
+          
+          echo "=== Log Space Report for $HOSTNAME ==="
+          echo "Date: $(date)"
+          echo "Partition: $LOG_PARTITION"
+          echo "Usage: $USAGE%"
+          echo "Threshold: $THRESHOLD%"
+          echo
+          
+          if [ "$USAGE" -gt "$THRESHOLD" ]; then
+              echo "WARNING: Log partition usage ($USAGE%) exceeds threshold ($THRESHOLD%)"
+              echo
+              echo "Largest log files:"
+              find "$LOG_PARTITION" -type f -exec ls -lh {} \; | sort -k5 -hr | head -10
+              echo
+              echo "Oldest log files that can be cleaned:"
+              find "$LOG_PARTITION" -name "*.log" -type f -mtime +30 | head -10
+              
+              # Send alert (if mail is configured)
+              echo "Log space alert for $HOSTNAME: Usage at $USAGE%" | \
+                  mail -s "Log Space Alert - $HOSTNAME" root 2>/dev/null || true
+          else
+              echo "OK: Log partition usage is within acceptable limits"
+          fi
+          
+          echo
+          echo "Recent log rotation activity:"
+          grep "$(date '+%b %d')" /var/log/cron | grep logrotate | tail -5
+        dest: /usr/local/bin/log-space-monitor.sh
+        owner: root
+        group: root
+        mode: '0755'
+    
+    - name: Create log analysis script
+      copy:
+        content: |
+          #!/bin/bash
+          # Log analysis and summary script
+          
+          LOG_DIR="/var/log"
+          REPORT_FILE="/tmp/log-analysis-$(date +%Y%m%d).txt"
+          
+          echo "=== Daily Log Analysis Report ===" > "$REPORT_FILE"
+          echo "Generated: $(date)" >> "$REPORT_FILE"
+          echo "Hostname: $(hostname)" >> "$REPORT_FILE"
+          echo >> "$REPORT_FILE"
+          
+          # System errors in the last 24 hours
+          echo "=== System Errors (Last 24 Hours) ===" >> "$REPORT_FILE"
+          journalctl --since "24 hours ago" --priority=err --no-pager >> "$REPORT_FILE" 2>/dev/null
+          echo >> "$REPORT_FILE"
+          
+          # Authentication failures
+          echo "=== Authentication Failures ===" >> "$REPORT_FILE"
+          grep "authentication failure" /var/log/secure 2>/dev/null | tail -10 >> "$REPORT_FILE"
+          echo >> "$REPORT_FILE"
+          
+          # Disk space usage
+          echo "=== Disk Space Usage ===" >> "$REPORT_FILE"
+          df -h >> "$REPORT_FILE"
+          echo >> "$REPORT_FILE"
+          
+          # Log file sizes
+          echo "=== Largest Log Files ===" >> "$REPORT_FILE"
+          find "$LOG_DIR" -type f -name "*.log" -exec ls -lh {} \; | sort -k5 -hr | head -10 >> "$REPORT_FILE"
+          
+          echo "Report saved to: $REPORT_FILE"
+        dest: /usr/local/bin/log-analysis.sh
+        owner: root
+        group: root
+        mode: '0755'
+    
+    - name: Schedule log monitoring
+      cron:
+        name: "{{ item.name }}"
+        minute: "{{ item.minute }}"
+        hour: "{{ item.hour }}"
+        job: "{{ item.job }}"
+        user: root
+      loop:
+        - name: "Hourly log space check"
+          minute: "0"
+          hour: "*"
+          job: "/usr/local/bin/log-space-monitor.sh >> /var/log/log-monitor.log 2>&1"
+        - name: "Daily log analysis"
+          minute: "30"
+          hour: "6"
+          job: "/usr/local/bin/log-analysis.sh"
+    
+    - name: Test logrotate configuration
+      shell: logrotate -d /etc/logrotate.conf
+      register: logrotate_test
+      failed_when: logrotate_test.rc != 0
+    
+    - name: Force logrotate to run (for testing)
+      shell: logrotate -f /etc/logrotate.conf
+      when: ansible_check_mode == false
