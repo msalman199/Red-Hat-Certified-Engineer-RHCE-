@@ -1,0 +1,53 @@
+---
+- name: Verify Role Execution Results
+  hosts: all
+  become: true
+  gather_facts: true
+  
+  tasks:
+    - name: Check if users were created
+      getent:
+        database: passwd
+        key: "{{ item }}"
+      register: user_check
+      failed_when: false
+      loop:
+        - developer
+        - operator
+    
+    - name: Display user creation results
+      debug:
+        msg: "User {{ item.item }} exists: {{ item.rc == 0 }}"
+      loop: "{{ user_check.results }}"
+    
+    - name: Check service status
+      service_facts:
+    
+    - name: Display service status
+      debug:
+        msg: "Apache service is {{ ansible_facts.services['httpd.service'].state | default('not found') }}"
+    
+    - name: Check if files were created
+      stat:
+        path: "{{ item }}"
+      register: file_check
+      loop:
+        - /var/www/html/index.html
+        - /opt/scripts/system_info.sh
+    
+    - name: Display file creation results
+      debug:
+        msg: "File {{ item.item }} exists: {{ item.stat.exists }}"
+      loop: "{{ file_check.results }}"
+    
+    - name: Test web server response
+      uri:
+        url: "http://{{ inventory_hostname }}"
+        method: GET
+        return_content: true
+      register: web_response
+      failed_when: false
+    
+    - name: Display web server test result
+      debug:
+        msg: "Web server response code: {{ web_response.status | default('Connection failed') }}"
