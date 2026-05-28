@@ -1,0 +1,141 @@
+---
+- name: Advanced Systemd Timer Configuration
+  hosts: webservers
+  become: yes
+  vars:
+    timer_directory: /etc/systemd/system
+    script_directory: /usr/local/bin
+    
+  tasks:
+    - name: Create web application maintenance script
+      copy:
+        content: |
+          #!/bin/bash
+          APP_DIR="/var/www/html"
+          LOG_FILE="/var/log/webapp-maintenance.log"
+          
+          echo "$(date): Starting web application maintenance" >> $LOG_FILE
+          
+          # Check if Apache is running
+          if systemctl is-active --quiet httpd; then
+              echo "$(date): Apache is running, proceeding with maintenance" >> $LOG_FILE
+              
+              # Clear application cache
+              find $APP_DIR/cache -type f -name "*.cache" -delete 2>/dev/null || true
+              
+              # Optimize images older than 1 day
+              find $APP_DIR -name "*.jpg" -o -name "*.png" -mtime +1 | while read img; do
+                  if command -v optipng >/dev/null 2>&1; then
+                      optipng -quiet "$img" 2>/dev/null || true
+                  fi
+              done
+              
+              # Generate sitemap
+              if [ -f "$APP_DIR/generate_sitemap.php" ]; then
+                  php $APP_DIR/generate_sitemap.php >> $LOG_FILE 2>&1
+              fi
+              
+              echo "$(date): Web application maintenance completed" >> $LOG_FILE
+          else
+              echo "$(date): Apache is not running, skipping maintenance" >> $LOG_FILE
+          fi
+        dest: "{{ script_directory }}/webapp-maintenance.sh"
+        mode: '0755'
+        owner: root
+        group: root
+    
+    - name: Create web application maintenance service
+      copy:
+        content: |
+          [Unit]
+          Description=Web Application Maintenance
+          After=httpd.service
+          Wants=httpd.service
+          
+          [Service]
+          Type=oneshot
+          ExecStart={{ script_directory }}/webapp-maintenance.sh
+          User=root
+          StandardOutput=journal
+          StandardError=journal
+          
+          # Resource limits
+          MemoryLimit=512M
+          CPUQuota=50%
+        dest: "{{ timer_directory }}/webapp-maintenance.service"
+        owner: root
+        group: root
+        mode: '0644'
+    
+    - name: Create web application maintenance timer
+      copy:
+        content: |
+          [Unit]
+          Description=Run web application maintenance
+          Requires=webapp-maintenance.service
+          
+          [Timer]
+          OnCalendar=*-*-* 02:30:00
+          RandomizedDelaySec=600
+          Persistent=true
+          
+          [Install]
+          WantedBy=timers.target
+        dest: "{{ timer_directory }}/webapp-maintenance.timer"
+        owner: root
+        group: root
+        mode: '0644'
+    
+    - name: Create log rotation service
+      copy:
+        content: |
+          [Unit]
+          Description=Custom Log Rotation
+          After=rsyslog.service
+          
+          [Service]
+          Type=oneshot
+          ExecStart=/usr/sbin/logrotate -f /etc/logrotate.conf
+          ExecStartPost=/bin/systemctl reload rsyslog
+          User=root
+          StandardOutput=journal
+          StandardError=journal
+        dest: "{{ timer_directory }}/custom-logrotate.service"
+        owner: root
+        group: root
+        mode: '0644'
+    
+    - name: Create log rotation timer (weekly)
+      copy:
+        content: |
+          [Unit]
+          Description=Run custom log rotation weekly
+          Requires=custom-logrotate.service
+          
+          [Timer]
+          OnCalendar=weekly
+          RandomizedDelaySec=3600
+          Persistent=true
+          
+          [Install]
+          WantedBy=timers.target
+        dest: "{{ timer_directory }}/custom-logrotate.timer"
+        owner: root
+        group: root
+        mode: '0644'
+    
+    - name: Reload systemd daemon
+      systemd:
+        daemon_reload: yes
+    
+    - name: Enable and start webapp maintenance timer
+      systemd:
+        name: webapp-maintenance.timer
+        enabled: yes
+        state: started
+    
+    - name: Enable and start custom logrotate timer
+      systemd:
+        name: custom-logrotate.timer
+        enabled: yes
+        state: started
