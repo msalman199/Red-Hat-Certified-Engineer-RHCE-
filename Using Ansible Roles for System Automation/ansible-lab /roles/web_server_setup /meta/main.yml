@@ -1,0 +1,33 @@
+galaxy_info:
+  author: Your Name
+  description: Complete web server setup with user management
+  license: MIT
+  min_ansible_version: 2.9
+  platforms:
+    - name: EL
+      versions:
+        - 7
+        - 8
+
+dependencies:
+  - role: user_management
+    vars:
+      users_to_create:
+        - name: webadmin
+          groups: ['wheel', 'apache']
+          shell: /bin/bash
+  
+  - role: service_config
+    vars:
+      services_to_manage:
+        - name: httpd
+          package: httpd
+          state: started
+          enabled: true
+  
+  - role: file_management
+    vars:
+      directories_to_create:
+        - path: /var/www/html/app
+          owner: apache
+          group: apache
