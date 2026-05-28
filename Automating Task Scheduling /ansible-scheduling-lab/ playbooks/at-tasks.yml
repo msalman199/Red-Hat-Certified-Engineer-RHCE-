@@ -1,0 +1,35 @@
+---
+- name: Schedule One-Time Tasks with At
+  hosts: all
+  become: yes
+  
+  tasks:
+    - name: Schedule system update in 5 minutes
+      at:
+        command: "yum update -y >> /var/log/scheduled-update.log 2>&1"
+        count: 5
+        units: minutes
+        unique: yes
+    
+    - name: Schedule log cleanup tomorrow at 3 AM
+      at:
+        command: "find /var/log -name '*.log' -mtime +30 -delete"
+        count: 1
+        units: days
+        time: "03:00"
+        unique: yes
+    
+    - name: Schedule service restart in 1 hour
+      at:
+        command: "systemctl restart httpd && echo 'Apache restarted' >> /var/log/service-restart.log"
+        count: 1
+        units: hours
+        unique: yes
+      when: inventory_hostname in groups['webservers']
+    
+    - name: Schedule temporary file creation
+      at:
+        command: "echo 'Temporary task executed at $(date)' > /tmp/at-task-$(date +%s).txt"
+        count: 2
+        units: minutes
+        unique: yes
