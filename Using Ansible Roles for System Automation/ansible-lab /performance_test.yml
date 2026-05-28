@@ -1,0 +1,36 @@
+---
+- name: Role Performance Testing
+  hosts: all
+  become: true
+  gather_facts: true
+  
+  tasks:
+    - name: Record start time
+      set_fact:
+        start_time: "{{ ansible_date_time.epoch }}"
+    
+    - name: Execute all roles with timing
+      include_role:
+        name: "{{ item }}"
+      loop:
+        - user_management
+        - service_config
+        - file_management
+      vars:
+        users_to_create:
+          - name: perftest
+            groups: ['wheel']
+        services_to_manage:
+          - name: httpd
+            state: started
+        files_to_create:
+          - dest: /tmp/perftest.txt
+            content: "Performance test file"
+    
+    - name: Record end time
+      set_fact:
+        end_time: "{{ ansible_date_time.epoch }}"
+    
+    - name: Calculate execution time
+      debug:
+        msg: "Total execution time: {{ end_time | int - start_time | int }} seconds"
