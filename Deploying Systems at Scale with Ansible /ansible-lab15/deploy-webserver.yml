@@ -1,0 +1,148 @@
+---
+- name: Deploy and Configure Web Servers at Scale
+  hosts: webservers
+  become: yes
+  vars:
+    web_server_port: 80
+    document_root: /var/www/html
+    server_name: "{{ inventory_hostname }}"
+    
+  tasks:
+    - name: Update package cache (Ubuntu/Debian)
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+      when: ansible_os_family == "Debian"
+      
+    - name: Update package cache (RHEL/CentOS)
+      yum:
+        update_cache: yes
+      when: ansible_os_family == "RedHat"
+      
+    - name: Install Apache web server (Ubuntu/Debian)
+      apt:
+        name: apache2
+        state: present
+      when: ansible_os_family == "Debian"
+      notify: restart apache
+      
+    - name: Install Apache web server (RHEL/CentOS)
+      yum:
+        name: httpd
+        state: present
+      when: ansible_os_family == "RedHat"
+      notify: restart httpd
+      
+    - name: Install additional packages
+      package:
+        name:
+          - curl
+          - wget
+          - unzip
+        state: present
+        
+    - name: Create document root directory
+      file:
+        path: "{{ document_root }}"
+        state: directory
+        owner: www-data
+        group: www-data
+        mode: '0755'
+      when: ansible_os_family == "Debian"
+      
+    - name: Create document root directory (RHEL/CentOS)
+      file:
+        path: "{{ document_root }}"
+        state: directory
+        owner: apache
+        group: apache
+        mode: '0755'
+      when: ansible_os_family == "RedHat"
+      
+    - name: Create custom index.html
+      template:
+        src: index.html.j2
+        dest: "{{ document_root }}/index.html"
+        owner: www-data
+        group: www-data
+        mode: '0644'
+      when: ansible_os_family == "Debian"
+      notify: restart apache
+      
+    - name: Create custom index.html (RHEL/CentOS)
+      template:
+        src: index.html.j2
+        dest: "{{ document_root }}/index.html"
+        owner: apache
+        group: apache
+        mode: '0644'
+      when: ansible_os_family == "RedHat"
+      notify: restart httpd
+      
+    - name: Configure Apache virtual host (Ubuntu/Debian)
+      template:
+        src: vhost.conf.j2
+        dest: "/etc/apache2/sites-available/{{ server_name }}.conf"
+        backup: yes
+      when: ansible_os_family == "Debian"
+      notify: restart apache
+      
+    - name: Enable Apache site (Ubuntu/Debian)
+      command: a2ensite "{{ server_name }}.conf"
+      when: ansible_os_family == "Debian"
+      notify: restart apache
+      
+    - name: Disable default Apache site (Ubuntu/Debian)
+      command: a2dissite 000-default.conf
+      when: ansible_os_family == "Debian"
+      notify: restart apache
+      
+    - name: Configure Apache virtual host (RHEL/CentOS)
+      template:
+        src: vhost.conf.j2
+        dest: "/etc/httpd/conf.d/{{ server_name }}.conf"
+        backup: yes
+      when: ansible_os_family == "RedHat"
+      notify: restart httpd
+      
+    - name: Start and enable Apache service (Ubuntu/Debian)
+      systemd:
+        name: apache2
+        state: started
+        enabled: yes
+      when: ansible_os_family == "Debian"
+      
+    - name: Start and enable Apache service (RHEL/CentOS)
+      systemd:
+        name: httpd
+        state: started
+        enabled: yes
+      when: ansible_os_family == "RedHat"
+      
+    - name: Configure firewall for HTTP (Ubuntu/Debian)
+      ufw:
+        rule: allow
+        port: "{{ web_server_port }}"
+        proto: tcp
+      when: ansible_os_family == "Debian"
+      
+    - name: Configure firewall for HTTP (RHEL/CentOS)
+      firewalld:
+        service: http
+        permanent: yes
+        state: enabled
+        immediate: yes
+      when: ansible_os_family == "RedHat"
+      
+  handlers:
+    - name: restart apache
+      systemd:
+        name: apache2
+        state: restarted
+      when: ansible_os_family == "Debian"
+      
+    - name: restart httpd
+      systemd:
+        name: httpd
+        state: restarted
+      when: ansible_os_family == "RedHat"
