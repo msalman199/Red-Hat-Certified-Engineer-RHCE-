@@ -1,0 +1,36 @@
+---
+infrastructure:
+  name: "Demo Infrastructure"
+  version: "1.0.0"
+  description: "Complete web application infrastructure with load balancing"
+  
+  components:
+    webservers:
+      count: 2
+      type: "apache"
+      version: "2.4"
+    
+    databases:
+      count: 1
+      type: "mysql"
+      version: "8.0"
+    
+    loadbalancers:
+      count: 1
+      type: "nginx"
+      version: "1.18"
+  
+  environments:
+    - development
+    - staging
+    - production
+  
+  maintainers:
+    - name: "Infrastructure Team"
+      email: "infrastructure@company.com"
+  
+  last_updated: "2024-01-15"
+  
+  dependencies:
+    ansible_version: ">=2.9"
+    python_version: ">=3.6"
