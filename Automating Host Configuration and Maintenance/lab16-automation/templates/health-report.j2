@@ -1,0 +1,42 @@
+System Health Report
+===================
+Host: {{ ansible_hostname }}
+Date: {{ ansible_date_time.iso8601 }}
+Uptime: {{ ansible_uptime_seconds | int // 86400 }} days, {{ (ansible_uptime_seconds | int % 86400) // 3600 }} hours
+
+System Resources:
+-----------------
+CPU Cores: {{ ansible_processor_vcpus }}
+Total Memory: {{ ansible_memtotal_mb }} MB
+Memory Usage: {{ memory_usage.stdout }}%
+Load Average: {{ load_average.stdout }}
+
+Disk Usage:
+-----------
+{% for line in disk_usage.stdout_lines %}
+{{ line }}
+{% endfor %}
+
+Network Interfaces:
+------------------
+{% for interface in ansible_interfaces %}
+{% if interface != 'lo' %}
+{{ interface }}: {{ ansible_facts[interface]['ipv4']['address'] | default('No IP') }}
+{% endif %}
+{% endfor %}
+
+Service Status:
+--------------
+{% for result in service_status.results %}
+{{ result.item }}: {{ 'Running' if result.status.ActiveState == 'active' else 'Not Running' }}
+{% endfor %}
+
+Failed Services: {{ failed_services_count.stdout }}
+
+{% if critical_issues is defined and critical_issues | length > 0 %}
+CRITICAL ISSUES:
+---------------
+{% for issue in critical_issues %}
+- {{ issue }}
+{% endfor %}
+{% endif %}
