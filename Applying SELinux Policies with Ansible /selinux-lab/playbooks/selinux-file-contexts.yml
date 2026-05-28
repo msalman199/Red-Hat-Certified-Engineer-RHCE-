@@ -1,0 +1,91 @@
+---
+- name: Manage SELinux File Contexts
+  hosts: selinux_servers
+  become: yes
+  vars:
+    webapp_directory: /opt/webapp
+    custom_app_directory: /opt/myapp
+    
+  tasks:
+    - name: Create test directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - "{{ webapp_directory }}"
+        - "{{ custom_app_directory }}"
+        - "{{ custom_app_directory }}/logs"
+        - "{{ custom_app_directory }}/config"
+    
+    - name: Create test files
+      copy:
+        content: |
+          <html>
+          <head><title>{{ item.title }}</title></head>
+          <body><h1>{{ item.content }}</h1></body>
+          </html>
+        dest: "{{ item.path }}"
+        mode: '0644'
+      loop:
+        - { path: "{{ webapp_directory }}/index.html", title: "Web App", content: "Welcome to Web Application" }
+        - { path: "{{ custom_app_directory }}/app.html", title: "Custom App", content: "Custom Application" }
+    
+    - name: Check current file contexts before changes
+      command: ls -Z {{ webapp_directory }}
+      register: context_before
+      changed_when: false
+      
+    - name: Display contexts before changes
+      debug:
+        msg: "Contexts before: {{ context_before.stdout_lines }}"
+    
+    - name: Set file context for web application directory
+      sefcontext:
+        target: "{{ webapp_directory }}(/.*)?"
+        setype: httpd_exec_t
+        state: present
+      register: webapp_context
+      
+    - name: Set file context for custom application directory
+      sefcontext:
+        target: "{{ custom_app_directory }}(/.*)?"
+        setype: admin_home_t
+        state: present
+      register: custom_context
+      
+    - name: Set specific context for log directory
+      sefcontext:
+        target: "{{ custom_app_directory }}/logs(/.*)?"
+        setype: var_log_t
+        state: present
+      register: log_context
+    
+    - name: Apply file contexts using restorecon
+      command: restorecon -R {{ item }}
+      loop:
+        - "{{ webapp_directory }}"
+        - "{{ custom_app_directory }}"
+      when: webapp_context.changed or custom_context.changed or log_context.changed
+    
+    - name: Verify new file contexts
+      command: ls -Z {{ item }}
+      register: context_after
+      changed_when: false
+      loop:
+        - "{{ webapp_directory }}"
+        - "{{ custom_app_directory }}"
+        
+    - name: Display new contexts
+      debug:
+        msg: "New contexts for {{ item.item }}: {{ item.stdout_lines }}"
+      loop: "{{ context_after.results }}"
+      
+    - name: List all custom file context rules
+      command: semanage fcontext -l -C
+      register: custom_rules
+      changed_when: false
+      
+    - name: Display custom SELinux rules
+      debug:
+        msg: "Custom SELinux file context rules: {{ custom_rules.stdout_lines }}"
