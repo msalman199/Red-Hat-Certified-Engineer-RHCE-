@@ -1,0 +1,60 @@
+---
+- name: Step-by-Step Playbook Execution
+  hosts: webservers
+  become: yes
+  vars:
+    packages_to_install:
+      - vim
+      - wget
+      - curl
+      - htop
+    
+  tasks:
+    - name: Update package cache
+      yum:
+        update_cache: yes
+        
+    - name: Install essential packages
+      yum:
+        name: "{{ packages_to_install }}"
+        state: present
+        
+    - name: Create application directory
+      file:
+        path: /opt/myapp
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+        
+    - name: Create configuration file
+      copy:
+        content: |
+          # Application Configuration
+          app_name=MyApplication
+          app_version=1.0.0
+          debug_mode=false
+        dest: /opt/myapp/config.conf
+        owner: root
+        group: root
+        mode: '0644'
+        
+    - name: Create startup script
+      copy:
+        content: |
+          #!/bin/bash
+          echo "Starting MyApplication..."
+          echo "Configuration loaded from /opt/myapp/config.conf"
+          echo "Application started successfully"
+        dest: /opt/myapp/start.sh
+        owner: root
+        group: root
+        mode: '0755'
+        
+    - name: Test the startup script
+      command: /opt/myapp/start.sh
+      register: startup_result
+      
+    - name: Display startup result
+      debug:
+        var: startup_result.stdout_lines
