@@ -1,0 +1,26 @@
+System Update Report
+====================
+Host: {{ ansible_hostname }}
+Date: {{ ansible_date_time.iso8601 }}
+Update Strategy: {{ update_strategy }}
+
+System Information:
+- OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
+- Kernel: {{ ansible_kernel }}
+- Architecture: {{ ansible_architecture }}
+
+{% if security_updates is defined and security_updates.changed %}
+Security Updates Applied: Yes
+{% elif all_updates is defined and all_updates.changed %}
+All Updates Applied: Yes
+{% else %}
+Updates Applied: No updates were necessary
+{% endif %}
+
+{% if kernel_check is defined and kernel_check.stdout == "reboot_needed" %}
+Reboot Required: Yes
+{% else %}
+Reboot Required: No
+{% endif %}
+
+Backup Location: {{ backup_dir }}
