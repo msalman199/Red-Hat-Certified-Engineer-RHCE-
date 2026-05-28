@@ -1,0 +1,11 @@
+---
+# Handlers for user management role
+- name: restart sshd
+  service:
+    name: sshd
+    state: restarted
+  become: true
+
+- name: reload user database
+  command: /usr/bin/getent passwd
+  changed_when: false
