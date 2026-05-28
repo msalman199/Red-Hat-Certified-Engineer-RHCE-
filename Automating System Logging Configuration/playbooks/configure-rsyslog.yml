@@ -1,0 +1,97 @@
+---
+- name: Configure System Logging with Rsyslog
+  hosts: all
+  become: yes
+  vars:
+    rsyslog_conf_dir: /etc/rsyslog.d
+    log_dir: /var/log
+    rsyslog_port: 514
+    
+  tasks:
+    - name: Ensure rsyslog package is installed
+      package:
+        name: rsyslog
+        state: present
+      
+    - name: Create custom rsyslog configuration directory
+      file:
+        path: "{{ rsyslog_conf_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+    
+    - name: Configure rsyslog main configuration
+      template:
+        src: rsyslog.conf.j2
+        dest: /etc/rsyslog.conf
+        owner: root
+        group: root
+        mode: '0644'
+        backup: yes
+      notify: restart rsyslog
+    
+    - name: Create custom application logging configuration
+      copy:
+        content: |
+          # Custom application logging rules
+          # Log all kernel messages to kern.log
+          kern.*                          /var/log/kern.log
+          
+          # Log authentication messages
+          auth,authpriv.*                 /var/log/auth.log
+          
+          # Log mail system messages
+          mail.*                          /var/log/mail.log
+          
+          # Log cron messages
+          cron.*                          /var/log/cron.log
+          
+          # Custom application logs
+          local0.*                        /var/log/application.log
+          local1.*                        /var/log/security.log
+        dest: "{{ rsyslog_conf_dir }}/50-custom-logs.conf"
+        owner: root
+        group: root
+        mode: '0644'
+      notify: restart rsyslog
+    
+    - name: Ensure log directories exist with proper permissions
+      file:
+        path: "{{ log_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+    
+    - name: Create custom log files with proper permissions
+      file:
+        path: "{{ item }}"
+        state: touch
+        owner: root
+        group: root
+        mode: '0640'
+      loop:
+        - /var/log/kern.log
+        - /var/log/auth.log
+        - /var/log/mail.log
+        - /var/log/cron.log
+        - /var/log/application.log
+        - /var/log/security.log
+    
+    - name: Enable and start rsyslog service
+      systemd:
+        name: rsyslog
+        enabled: yes
+        state: started
+    
+    - name: Configure rsyslog to start on boot
+      systemd:
+        name: rsyslog
+        enabled: yes
+  
+  handlers:
+    - name: restart rsyslog
+      systemd:
+        name: rsyslog
+        state: restarted
