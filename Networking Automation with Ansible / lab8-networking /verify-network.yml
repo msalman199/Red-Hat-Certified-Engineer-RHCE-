@@ -1,0 +1,38 @@
+---
+- name: Verify Network Configuration
+  hosts: all
+  become: yes
+  
+  tasks:
+    - name: Check hostname configuration
+      command: hostname
+      register: current_hostname
+      
+    - name: Display current hostname
+      debug:
+        msg: "Current hostname: {{ current_hostname.stdout }}"
+    
+    - name: Get network interface information
+      command: nmcli connection show
+      register: nmcli_connections
+      
+    - name: Display network connections
+      debug:
+        msg: "{{ nmcli_connections.stdout_lines }}"
+    
+    - name: Check IP address assignment
+      command: ip addr show eth0
+      register: ip_info
+      
+    - name: Display IP configuration
+      debug:
+        msg: "{{ ip_info.stdout_lines }}"
+    
+    - name: Test DNS resolution
+      command: nslookup google.com
+      register: dns_test
+      ignore_errors: yes
+      
+    - name: Display DNS test results
+      debug:
+        msg: "DNS Resolution: {{ 'SUCCESS' if dns_test.rc == 0 else 'FAILED' }}"
