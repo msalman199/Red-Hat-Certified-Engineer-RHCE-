@@ -1,0 +1,87 @@
+---
+- name: System Configuration with Roles
+  hosts: all
+  become: true
+  gather_facts: true
+  
+  vars:
+    # User management variables
+    users_to_create:
+      - name: developer
+        groups: ['wheel', 'developers']
+        shell: /bin/bash
+        create_home: true
+      - name: operator
+        groups: ['operators']
+        shell: /bin/bash
+        create_home: true
+    
+    default_groups:
+      - developers
+      - operators
+    
+    # Service configuration variables
+    services_to_manage:
+      - name: httpd
+        package: httpd
+        state: started
+        enabled: true
+      - name: firewalld
+        state: started
+        enabled: true
+    
+    service_config_files:
+      - template: httpd.conf.j2
+        dest: /etc/httpd/conf/httpd.conf
+        owner: root
+        group: root
+        mode: '0644'
+    
+    # File management variables
+    directories_to_create:
+      - path: /var/www/html/app
+        owner: apache
+        group: apache
+        mode: '0755'
+      - path: /opt/scripts
+        owner: root
+        group: root
+        mode: '0755'
+    
+    files_to_create:
+      - dest: /var/www/html/index.html
+        content: |
+          <html>
+          <head><title>Ansible Managed Server</title></head>
+          <body>
+            <h1>Welcome to {{ inventory_hostname }}</h1>
+            <p>This server is managed by Ansible roles.</p>
+            <p>Server configured on: {{ ansible_date_time.date }}</p>
+          </body>
+          </html>
+        owner: apache
+        group: apache
+        mode: '0644'
+      
+      - dest: /opt/scripts/system_info.sh
+        content: |
+          #!/bin/bash
+          echo "System Information for $(hostname)"
+          echo "=================================="
+          echo "OS: $(cat /etc/redhat-release)"
+          echo "Kernel: $(uname -r)"
+          echo "Uptime: $(uptime)"
+          echo "Memory: $(free -h | grep Mem)"
+        owner: root
+        group: root
+        mode: '0755'
+
+  roles:
+    - user_management
+    - service_config
+    - file_management
+
+  post_tasks:
+    - name: Verify role execution
+      debug:
+        msg: "All roles have been successfully applied to {{ inventory_hostname }}"
