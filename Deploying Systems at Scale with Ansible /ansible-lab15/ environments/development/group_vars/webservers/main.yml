@@ -1,0 +1,21 @@
+---
+# Development Environment Variables
+environment_name: "Development"
+debug_mode: true
+log_level: "debug"
+backup_enabled: false
+monitoring_enabled: false
+
+# Performance settings for development
+worker_processes: 1
+worker_connections: 50
+keepalive_timeout: 30
+
+# Security settings (relaxed for development)
+ssl_enabled: false
+security_headers: false
+
+# Application settings
+app_version: "latest"
+database_pool_size: 5
+cache_enabled: false
