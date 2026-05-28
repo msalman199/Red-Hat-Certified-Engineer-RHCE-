@@ -1,0 +1,108 @@
+---
+- name: Configure Firewall Rules and Zones
+  hosts: all
+  become: yes
+  vars:
+    default_zone: public
+    
+  tasks:
+    - name: Install firewalld
+      yum:
+        name: firewalld
+        state: present
+
+    - name: Start and enable firewalld
+      systemd:
+        name: firewalld
+        state: started
+        enabled: yes
+
+    - name: Set default zone
+      firewalld:
+        zone: "{{ default_zone }}"
+        state: enabled
+        permanent: yes
+        immediate: yes
+
+    - name: Configure web server firewall rules
+      firewalld:
+        service: "{{ item }}"
+        zone: public
+        permanent: yes
+        immediate: yes
+        state: enabled
+      loop:
+        - http
+        - https
+        - ssh
+      when: inventory_hostname in groups['webservers']
+
+    - name: Configure database server firewall rules
+      firewalld:
+        port: "{{ item }}"
+        zone: public
+        permanent: yes
+        immediate: yes
+        state: enabled
+      loop:
+        - 3306/tcp
+        - 22/tcp
+      when: inventory_hostname in groups['databases']
+
+    - name: Configure application server firewall rules
+      firewalld:
+        port: "{{ item }}"
+        zone: public
+        permanent: yes
+        immediate: yes
+        state: enabled
+      loop:
+        - 8080/tcp
+        - 8443/tcp
+        - 22/tcp
+      when: inventory_hostname in groups['appservers']
+
+    - name: Create custom zone for internal services
+      firewalld:
+        zone: internal
+        state: present
+        permanent: yes
+
+    - name: Configure internal zone for database access
+      firewalld:
+        source: "{{ item }}"
+        zone: internal
+        permanent: yes
+        immediate: yes
+        state: enabled
+      loop:
+        - 192.168.1.0/24
+      when: inventory_hostname in groups['databases']
+
+    - name: Allow database port in internal zone
+      firewalld:
+        port: 3306/tcp
+        zone: internal
+        permanent: yes
+        immediate: yes
+        state: enabled
+      when: inventory_hostname in groups['databases']
+
+    - name: Block specific IP ranges (example security rule)
+      firewalld:
+        rich_rule: 'rule family="ipv4" source address="10.0.0.0/8" drop'
+        zone: public
+        permanent: yes
+        immediate: yes
+        state: enabled
+
+    - name: Configure rate limiting for SSH
+      firewalld:
+        rich_rule: 'rule service name="ssh" accept limit value="3/m"'
+        zone: public
+        permanent: yes
+        immediate: yes
+        state: enabled
+
+    - name: Reload firewalld configuration
+      command: firewall-cmd --reload
