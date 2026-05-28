@@ -1,0 +1,212 @@
+---
+- name: Validate Configuration Consistency Across Hosts
+  hosts: all
+  gather_facts: yes
+  vars:
+    # Expected configuration standards
+    expected_os_family: "RedHat"
+    minimum_memory_mb: 1024
+    required_services:
+      - sshd
+      - chronyd
+    prohibited_services:
+      - telnet
+    expected_timezone: "UTC"
+    minimum_cpu_cores: 1
+    
+  tasks:
+    - name: Initialize consistency check results
+      set_fact:
+        consistency_results: []
+        assertion_failures: []
+        
+    - name: Validate Operating System Consistency
+      block:
+        - name: Assert OS family consistency
+          assert:
+            that:
+              - ansible_os_family == expected_os_family
+            fail_msg: |
+              OS Family mismatch on {{ ansible_hostname }}:
+              Expected: {{ expected_os_family }}
+              Actual: {{ ansible_os_family }}
+            success_msg: "OS family validation passed for {{ ansible_hostname }}"
+            
+        - name: Record OS validation success
+          set_fact:
+            consistency_results: "{{ consistency_results + [os_result] }}"
+          vars:
+            os_result:
+              host: "{{ ansible_hostname }}"
+              check: "OS Family"
+              status: "PASS"
+              expected: "{{ expected_os_family }}"
+              actual: "{{ ansible_os_family }}"
+              
+      rescue:
+        - name: Record OS validation failure
+          set_fact:
+            assertion_failures: "{{ assertion_failures + [os_failure] }}"
+          vars:
+            os_failure:
+              host: "{{ ansible_hostname }}"
+              check: "OS Family"
+              status: "FAIL"
+              expected: "{{ expected_os_family }}"
+              actual: "{{ ansible_os_family }}"
+              error: "{{ ansible_failed_result.msg }}"
+              
+    - name: Validate Memory Requirements
+      block:
+        - name: Assert minimum memory requirement
+          assert:
+            that:
+              - ansible_memtotal_mb >= minimum_memory_mb
+            fail_msg: |
+              Insufficient memory on {{ ansible_hostname }}:
+              Required: {{ minimum_memory_mb }} MB
+              Available: {{ ansible_memtotal_mb }} MB
+            success_msg: "Memory requirement satisfied for {{ ansible_hostname }}"
+            
+        - name: Record memory validation success
+          set_fact:
+            consistency_results: "{{ consistency_results + [memory_result] }}"
+          vars:
+            memory_result:
+              host: "{{ ansible_hostname }}"
+              check: "Memory Requirement"
+              status: "PASS"
+              expected: "{{ minimum_memory_mb }} MB minimum"
+              actual: "{{ ansible_memtotal_mb }} MB"
+              
+      rescue:
+        - name: Record memory validation failure
+          set_fact:
+            assertion_failures: "{{ assertion_failures + [memory_failure] }}"
+          vars:
+            memory_failure:
+              host: "{{ ansible_hostname }}"
+              check: "Memory Requirement"
+              status: "FAIL"
+              expected: "{{ minimum_memory_mb }} MB minimum"
+              actual: "{{ ansible_memtotal_mb }} MB"
+              error: "{{ ansible_failed_result.msg }}"
+              
+    - name: Validate CPU Requirements
+      block:
+        - name: Assert minimum CPU cores
+          assert:
+            that:
+              - ansible_processor_vcpus >= minimum_cpu_cores
+            fail_msg: |
+              Insufficient CPU cores on {{ ansible_hostname }}:
+              Required: {{ minimum_cpu_cores }} cores minimum
+              Available: {{ ansible_processor_vcpus }} cores
+            success_msg: "CPU requirement satisfied for {{ ansible_hostname }}"
+            
+        - name: Record CPU validation success
+          set_fact:
+            consistency_results: "{{ consistency_results + [cpu_result] }}"
+          vars:
+            cpu_result:
+              host: "{{ ansible_hostname }}"
+              check: "CPU Cores"
+              status: "PASS"
+              expected: "{{ minimum_cpu_cores }} cores minimum"
+              actual: "{{ ansible_processor_vcpus }} cores"
+              
+      rescue:
+        - name: Record CPU validation failure
+          set_fact:
+            assertion_failures: "{{ assertion_failures + [cpu_failure] }}"
+          vars:
+            cpu_failure:
+              host: "{{ ansible_hostname }}"
+              check: "CPU Cores"
+              status: "FAIL"
+              expected: "{{ minimum_cpu_cores }} cores minimum"
+              actual: "{{ ansible_processor_vcpus }} cores"
+              error: "{{ ansible_failed_result.msg }}"
+              
+    - name: Validate Service Consistency
+      block:
+        - name: Gather service facts
+          service_facts:
+          
+        - name: Assert required services are running
+          assert:
+            that:
+              - ansible_facts.services[item + '.service'].state == 'running'
+            fail_msg: |
+              Required service {{ item }} is not running on {{ ansible_hostname }}
+              Status: {{ ansible_facts.services[item + '.service'].state | default('not found') }}
+            success_msg: "Service {{ item }} is running on {{ ansible_hostname }}"
+          loop: "{{ required_services }}"
+          when: (item + '.service') in ansible_facts.services
+          
+        - name: Record service validation results
+          set_fact:
+            consistency_results: "{{ consistency_results + [service_result] }}"
+          vars:
+            service_result:
+              host: "{{ ansible_hostname }}"
+              check: "Required Services"
+              status: "PASS"
+              services: "{{ required_services | join(', ') }}"
+              
+      rescue:
+        - name: Record service validation failure
+          set_fact:
+            assertion_failures: "{{ assertion_failures + [service_failure] }}"
+          vars:
+            service_failure:
+              host: "{{ ansible_hostname }}"
+              check: "Required Services"
+              status: "FAIL"
+              error: "{{ ansible_failed_result.msg }}"
+              
+    - name: Validate Network Configuration Consistency
+      block:
+        - name: Assert hostname format consistency
+          assert:
+            that:
+              - ansible_hostname | length > 0
+              - ansible_hostname is match("^[a-zA-Z0-9-]+$")
+            fail_msg: |
+              Invalid hostname format on {{ ansible_hostname }}:
+              Hostname should contain only alphanumeric characters and hyphens
+            success_msg: "Hostname format is valid for {{ ansible_hostname }}"
+            
+        - name: Assert FQDN is properly configured
+          assert:
+            that:
+              - ansible_fqdn != ansible_hostname
+              - ansible_fqdn | length > ansible_hostname | length
+            fail_msg: |
+              FQDN not properly configured on {{ ansible_hostname }}:
+              FQDN: {{ ansible_fqdn }}
+              Hostname: {{ ansible_hostname }}
+            success_msg: "FQDN is properly configured for {{ ansible_hostname }}"
+          when: ansible_fqdn is defined
+          
+        - name: Record network validation success
+          set_fact:
+            consistency_results: "{{ consistency_results + [network_result] }}"
+          vars:
+            network_result:
+              host: "{{ ansible_hostname }}"
+              check: "Network Configuration"
+              status: "PASS"
+              hostname: "{{ ansible_hostname }}"
+              fqdn: "{{ ansible_fqdn | default('N/A') }}"
+              
+      rescue:
+        - name: Record network validation failure
+          set_fact:
+            assertion_failures: "{{ assertion_failures + [network_failure] }}"
+          vars:
+            network_failure:
+              host: "{{ ansible_hostname }}"
+              check: "Network Configuration"
+              status: "FAIL"
+              error: "{{ ansible_failed_result.msg }}"
