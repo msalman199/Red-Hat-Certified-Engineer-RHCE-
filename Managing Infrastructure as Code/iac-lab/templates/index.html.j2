@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ app_name | title }} - {{ environment | title }}</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; background-color: #f4f4f4; }
+        .container { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .header { color: #333; border-bottom: 2px solid #007acc; padding-bottom: 10px; }
+        .info { margin: 20px 0; }
+        .status { color: #28a745; font-weight: bold; }
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background-color: #f8f9fa; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="header">{{ app_name | title }} Application</h1>
+        <p class="status">✓ Application is running successfully!</p>
+        
+        <div class="info">
+            <h2>Server Information</h2>
+            <table>
+                <tr><th>Property</th><th>Value</th></tr>
+                <tr><td>Server Name</td><td>{{ inventory_hostname }}</td></tr>
+                <tr><td>IP Address</td><td>{{ ansible_default_ipv4.address }}</td></tr>
+                <tr><td>Environment</td><td>{{ environment | title }}</td></tr>
+                <tr><td>Application Version</td><td>{{ app_version }}</td></tr>
+                <tr><td>Deployment Time</td><td>{{ ansible_date_time.iso8601 }}</td></tr>
+                <tr><td>Operating System</td><td>{{ ansible_distribution }} {{ ansible_distribution_version }}</td></tr>
+            </table>
+        </div>
+        
+        <div class="info">
+            <h2>Application Status</h2>
+            <p>This page was generated automatically using Infrastructure as Code (IaC) principles with Ansible.</p>
+            <p>Project: <strong>{{ project_name }}</strong></p>
+            <p>Contact: <a href="mailto:{{ admin_email }}">{{ admin_email }}</a></p>
+        </div>
+    </div>
+</body>
+</html>
