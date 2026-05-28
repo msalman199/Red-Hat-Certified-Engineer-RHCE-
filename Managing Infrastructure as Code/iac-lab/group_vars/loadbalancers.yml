@@ -1,0 +1,14 @@
+---
+# Load balancer configuration
+lb_algorithm: "round_robin"
+lb_health_check_interval: 30
+lb_timeout: 5
+
+# Backend servers
+backend_servers:
+  - { name: "web1", ip: "192.168.1.10", port: 80, weight: 1 }
+  - { name: "web2", ip: "192.168.1.11", port: 80, weight: 1 }
+
+# SSL termination
+ssl_termination: true
+ssl_protocols: "TLSv1.2 TLSv1.3"
