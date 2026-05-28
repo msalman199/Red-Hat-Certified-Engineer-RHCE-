@@ -1,0 +1,134 @@
+---
+- name: Deploy Web Servers with Environment-Specific Configuration
+  hosts: webservers
+  become: yes
+  vars:
+    document_root: /var/www/html
+    server_name: "{{ inventory_hostname }}"
+    
+  tasks:
+    - name: Display deployment information
+      debug:
+        msg: |
+          Deploying to {{ environment_name }} environment
+          Host: {{ inventory_hostname }}
+          Port: {{ web_server_port }}
+          Max Connections: {{ max_connections }}
+          
+    - name: Update package cache (Ubuntu/Debian)
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+      when: ansible_os_family == "Debian"
+      
+    - name: Install Apache web server (Ubuntu/Debian)
+      apt:
+        name: apache2
+        state: present
+      when: ansible_os_family == "Debian"
+      notify: restart apache
+      
+    - name: Install additional packages based on environment
+      package:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - curl
+        - wget
+        - unzip
+        - "{{ 'htop' if debug_mode else 'omit' }}"
+        - "{{ 'fail2ban' if fail2ban_enabled | default(false) else 'omit' }}"
+      when: item != 'omit'
+      
+    - name: Create document root directory
+      file:
+        path: "{{ document_root }}"
+        state: directory
+        owner: www-data
+        group: www-data
+        mode: '0755'
+      when: ansible_os_family == "Debian"
+      
+    - name: Create environment-specific index.html
+      template:
+        src: index-enhanced.html.j2
+        dest: "{{ document_root }}/index.html"
+        owner: www-data
+        group: www-data
+        mode: '0644'
+      when: ansible_os_family == "Debian"
+      notify: restart apache
+      
+    - name: Configure Apache with environment-specific settings
+      template:
+        src: apache-enhanced.conf.j2
+        dest: "/etc/apache2/sites-available/{{ server_name }}.conf"
+        backup: yes
+      when: ansible_os_family == "Debian"
+      notify: restart apache
+      
+    - name: Enable Apache modules based on environment
+      apache2_module:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - rewrite
+        - "{{ 'ssl' if ssl_enabled | default(false) else 'omit' }}"
+        - "{{ 'headers' if security_headers | default(false) else 'omit' }}"
+      when: 
+        - ansible_os_family == "Debian"
+        - item != 'omit'
+      notify: restart apache
+      
+    - name: Enable Apache site
+      command: a2ensite "{{ server_name }}.conf"
+      when: ansible_os_family == "Debian"
+      notify: restart apache
+      
+    - name: Disable default Apache site
+      command: a2dissite 000-default.conf
+      when: ansible_os_family == "Debian"
+      notify: restart apache
+      
+    - name: Configure Apache port
+      lineinfile:
+        path: /etc/apache2/ports.conf
+        regexp: '^Listen 80'
+        line: "Listen {{ web_server_port }}"
+        backup: yes
+      when: ansible_os_family == "Debian"
+      notify: restart apache
+      
+    - name: Start and enable Apache service
+      systemd:
+        name: apache2
+        state: started
+        enabled: yes
+      when: ansible_os_family == "Debian"
+      
+    - name: Configure firewall for HTTP
+      ufw:
+        rule: allow
+        port: "{{ web_server_port }}"
+        proto: tcp
+      when: ansible_os_family == "Debian"
+      
+    - name: Create monitoring script (if monitoring enabled)
+      template:
+        src: monitor.sh.j2
+        dest: /usr/local/bin/web-monitor.sh
+        mode: '0755'
+      when: monitoring_enabled | default(false)
+      
+    - name: Setup log rotation
+      template:
+        src: logrotate.j2
+        dest: "/etc/logrotate.d/{{ server_name }}"
+      when: ansible_os_family == "Debian"
+      
+  handlers:
+    - name: restart apache
+      systemd:
+        name: apache2
+        state: restarted
+      when: ansible_os_family == "Debian"
