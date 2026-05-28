@@ -1,0 +1,48 @@
+---
+- name: Advanced Debugging Techniques
+  hosts: webservers
+  gather_facts: yes
+  vars:
+    users:
+      - name: alice
+        uid: 1001
+        groups: [wheel, developers]
+      - name: bob
+        uid: 1002
+        groups: [developers]
+    
+  tasks:
+    - name: Debug - Display entire data structure
+      debug:
+        var: users
+        
+    - name: Debug - Loop through complex data
+      debug:
+        msg: |
+          User: {{ item.name }}
+          UID: {{ item.uid }}
+          Groups: {{ item.groups | join(', ') }}
+      loop: "{{ users }}"
+      
+    - name: Register command output for debugging
+      command: df -h
+      register: disk_usage
+      
+    - name: Debug - Display command results
+      debug:
+        var: disk_usage
+        
+    - name: Debug - Display specific parts of registered variable
+      debug:
+        msg: |
+          Command: {{ disk_usage.cmd | join(' ') }}
+          Return Code: {{ disk_usage.rc }}
+          Output Lines: {{ disk_usage.stdout_lines | length }}
+          
+    - name: Debug - Network interface information
+      debug:
+        msg: "Interface {{ item }} has IP {{ hostvars[inventory_hostname]['ansible_' + item]['ipv4']['address'] }}"
+      loop: "{{ ansible_interfaces }}"
+      when: 
+        - hostvars[inventory_hostname]['ansible_' + item] is defined
+        - hostvars[inventory_hostname]['ansible_' + item]['ipv4'] is defined
