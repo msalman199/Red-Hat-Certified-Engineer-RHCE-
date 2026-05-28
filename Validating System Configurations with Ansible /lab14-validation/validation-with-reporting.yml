@@ -1,0 +1,246 @@
+---
+- name: Comprehensive System Validation with Error Handling and Reporting
+  hosts: all
+  gather_facts: yes
+  vars:
+    validation_timestamp: "{{ ansible_date_time.iso8601 }}"
+    report_directory: "/tmp/ansible-validation-reports"
+    
+  tasks:
+    - name: Initialize validation tracking variables
+      set_fact:
+        validation_summary: []
+        error_summary: []
+        host_status: "UNKNOWN"
+        total_checks: 0
+        passed_checks: 0
+        failed_checks: 0
+        
+    - name: Create report directory on control node
+      file:
+        path: "{{ report_directory }}"
+        state: directory
+        mode: '0755'
+      delegate_to: localhost
+      run_once: true
+      
+    - name: Disk Usage Validation with Error Handling
+      block:
+        - name: Increment total checks counter
+          set_fact:
+            total_checks: "{{ total_checks | int + 1 }}"
+            
+        - name: Get root filesystem information
+          set_fact:
+            root_fs: "{{ ansible_mounts | selectattr('mount', 'equalto', '/') | first }}"
+            
+        - name: Calculate disk usage percentage
+          set_fact:
+            disk_usage_percent: "{{ ((root_fs.size_total - root_fs.size_available) / root_fs.size_total * 100) | round(2) }}"
+            
+        - name: Validate disk usage is acceptable
+          assert:
+            that:
+              - (disk_usage_percent | float) < 90
+            fail_msg: "Disk usage {{ disk_usage_percent }}% exceeds 90% threshold"
+            success_msg: "Disk usage {{ disk_usage_percent }}% is within acceptable limits"
+            
+        - name: Record successful disk validation
+          set_fact:
+            passed_checks: "{{ passed_checks | int + 1 }}"
+            validation_summary: "{{ validation_summary + [disk_success] }}"
+          vars:
+            disk_success:
+              check_name: "Disk Usage Validation"
+              status: "PASS"
+              details: "Usage: {{ disk_usage_percent }}%"
+              timestamp: "{{ validation_timestamp }}"
+              
+      rescue:
+        - name: Record disk validation failure
+          set_fact:
+            failed_checks: "{{ failed_checks | int + 1 }}"
+            validation_summary: "{{ validation_summary + [disk_failure] }}"
+            error_summary: "{{ error_summary + [disk_error] }}"
+          vars:
+            disk_failure:
+              check_name: "Disk Usage Validation"
+              status: "FAIL"
+              details: "{{ ansible_failed_result.msg }}"
+              timestamp: "{{ validation_timestamp }}"
+            disk_error:
+              error_type: "Disk Usage"
+              error_message: "{{ ansible_failed_result.msg }}"
+              host: "{{ ansible_hostname }}"
+              timestamp: "{{ validation_timestamp }}"
+              
+    - name: Memory Validation with Error Handling
+      block:
+        - name: Increment total checks counter
+          set_fact:
+            total_checks: "{{ total_checks | int + 1 }}"
+            
+        - name: Validate minimum memory requirement
+          assert:
+            that:
+              - ansible_memtotal_mb >= 1024
+            fail_msg: "Available memory {{ ansible_memtotal_mb }}MB is below 1024MB requirement"
+            success_msg: "Memory {{ ansible_memtotal_mb }}MB meets minimum requirements"
+            
+        - name: Record successful memory validation
+          set_fact:
+            passed_checks: "{{ passed_checks | int + 1 }}"
+            validation_summary: "{{ validation_summary + [memory_success] }}"
+          vars:
+            memory_success:
+              check_name: "Memory Validation"
+              status: "PASS"
+              details: "Available: {{ ansible_memtotal_mb }}MB"
+              timestamp: "{{ validation_timestamp }}"
+              
+      rescue:
+        - name: Record memory validation failure
+          set_fact:
+            failed_checks: "{{ failed_checks | int + 1 }}"
+            validation_summary: "{{ validation_summary + [memory_failure] }}"
+            error_summary: "{{ error_summary + [memory_error] }}"
+          vars:
+            memory_failure:
+              check_name: "Memory Validation"
+              status: "FAIL"
+              details: "{{ ansible_failed_result.msg }}"
+              timestamp: "{{ validation_timestamp }}"
+            memory_error:
+              error_type: "Memory"
+              error_message: "{{ ansible_failed_result.msg }}"
+              host: "{{ ansible_hostname }}"
+              timestamp: "{{ validation_timestamp }}"
+              
+    - name: Service Status Validation with Error Handling
+      block:
+        - name: Increment total checks counter
+          set_fact:
+            total_checks: "{{ total_checks | int + 1 }}"
+            
+        - name: Gather service facts
+          service_facts:
+          
+        - name: Validate SSH service is running
+          assert:
+            that:
+              - ansible_facts.services['sshd.service'].state == 'running'
+            fail_msg: "SSH service is not running: {{ ansible_facts.services['sshd.service'].state | default('not found') }}"
+            success_msg: "SSH service is running properly"
+            
+        - name: Record successful service validation
+          set_fact:
+            passed_checks: "{{ passed_checks | int + 1 }}"
+            validation_summary: "{{ validation_summary + [service_success] }}"
+          vars:
+            service_success:
+              check_name: "SSH Service Validation"
+              status: "PASS"
+              details: "SSH service is running"
+              timestamp: "{{ validation_timestamp }}"
+              
+      rescue:
+        - name: Record service validation failure
+          set_fact:
+            failed_checks: "{{ failed_checks | int + 1 }}"
+            validation_summary: "{{ validation_summary + [service_failure] }}"
+            error_summary: "{{ error_summary + [service_error] }}"
+          vars:
+            service_failure:
+              check_name: "SSH Service Validation"
+              status: "FAIL"
+              details: "{{ ansible_failed_result.msg }}"
+              timestamp: "{{ validation_timestamp }}"
+            service_error:
+              error_type: "Service"
+              error_message: "{{ ansible_failed_result.msg }}"
+              host: "{{ ansible_hostname }}"
+              timestamp: "{{ validation_timestamp }}"
+              
+    - name: Network Connectivity Validation with Error Handling
+      block:
+        - name: Increment total checks counter
+          set_fact:
+            total_checks: "{{ total_checks | int + 1 }}"
+            
+        - name: Test network connectivity to control node
+          wait_for:
+            host: "{{ hostvars['localhost']['ansible_default_ipv4']['address'] | default('127.0.0.1') }}"
+            port: 22
+            timeout: 5
+          delegate_to: "{{ inventory_hostname }}"
+          
+        - name: Record successful network validation
+          set_fact:
+            passed_checks: "{{ passed_checks | int + 1 }}"
+            validation_summary: "{{ validation_summary + [network_success] }}"
+          vars:
+            network_success:
+              check_name: "Network Connectivity"
+              status: "PASS"
+              details: "Network connectivity verified"
+              timestamp: "{{ validation_timestamp }}"
+              
+      rescue:
+        - name: Record network validation failure
+          set_fact:
+            failed_checks: "{{ failed_checks | int + 1 }}"
+            validation_summary: "{{ validation_summary + [network_failure] }}"
+            error_summary: "{{ error_summary + [network_error] }}"
+          vars:
+            network_failure:
+              check_name: "Network Connectivity"
+              status: "FAIL"
+              details: "{{ ansible_failed_result.msg }}"
+              timestamp: "{{ validation_timestamp }}"
+            network_error:
+              error_type: "Network"
+              error_message: "{{ ansible_failed_result.msg }}"
+              host: "{{ ansible_hostname }}"
+              timestamp: "{{ validation_timestamp }}"
+              
+    - name: Determine overall host status
+      set_fact:
+        host_status: "{{ 'FAIL' if (failed_checks | int) > 0 else 'PASS' }}"
+        success_rate: "{{ ((passed_checks | int) / (total_checks | int) * 100) | round(2) }}"
+        
+    - name: Display validation summary
+      debug:
+        msg: |
+          ========================================
+          VALIDATION SUMMARY for {{ ansible_hostname }}
+          ========================================
+          Overall Status: {{ host_status }}
+          Total Checks: {{ total_checks }}
+          Passed: {{ passed_checks }}
+          Failed: {{ failed_checks }}
+          Success Rate: {{ success_rate }}%
+          Timestamp: {{ validation_timestamp }}
+          ========================================
+          
+    - name: Generate detailed host report
+      template:
+        src: host_validation_report.j2
+        dest: "{{ report_directory }}/{{ ansible_hostname }}_validation_report.json"
+      delegate_to: localhost
+      vars:
+        report_data:
+          hostname: "{{ ansible_hostname }}"
+          ip_address: "{{ ansible_default_ipv4.address }}"
+          overall_status: "{{ host_status }}"
+          validation_timestamp: "{{ validation_timestamp }}"
+          statistics:
+            total_checks: "{{ total_checks }}"
+            passed_checks: "{{ passed_checks }}"
+            failed_checks: "{{ failed_checks }}"
+            success_rate: "{{ success_rate }}"
+          validation_results: "{{ validation_summary }}"
+          errors: "{{ error_summary }}"
+          system_info:
+            os_family: "{{ ansible_os_family }}"
+            os_version: "{{ ansible_distribution_version }}"
+            architecture: "{{ ansible_architecture }}"
