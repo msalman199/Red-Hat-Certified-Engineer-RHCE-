@@ -1,0 +1,149 @@
+---
+- name: Configure Log Rotation and Retention Policies
+  hosts: all
+  become: yes
+  vars:
+    logrotate_conf_dir: /etc/logrotate.d
+    default_retention_days: 30
+    large_log_retention_days: 7
+    
+  tasks:
+    - name: Ensure logrotate package is installed
+      package:
+        name: logrotate
+        state: present
+    
+    - name: Configure main logrotate configuration
+      template:
+        src: logrotate.conf.j2
+        dest: /etc/logrotate.conf
+        owner: root
+        group: root
+        mode: '0644'
+        backup: yes
+    
+    - name: Configure system log rotation
+      copy:
+        content: |
+          # System logs rotation configuration
+          /var/log/messages
+          /var/log/secure
+          /var/log/maillog
+          /var/log/cron
+          /var/log/spooler
+          /var/log/boot.log {
+              daily
+              rotate {{ default_retention_days }}
+              missingok
+              notifempty
+              compress
+              delaycompress
+              sharedscripts
+              postrotate
+                  /bin/kill -HUP `cat /var/run/rsyslogd.pid 2> /dev/null` 2> /dev/null || true
+              endscript
+          }
+        dest: "{{ logrotate_conf_dir }}/syslog"
+        owner: root
+        group: root
+        mode: '0644'
+    
+    - name: Configure custom application log rotation
+      copy:
+        content: |
+          # Custom application logs rotation
+          /var/log/application.log
+          /var/log/security.log
+          /var/log/kern.log
+          /var/log/auth.log {
+              daily
+              rotate {{ default_retention_days }}
+              missingok
+              notifempty
+              compress
+              delaycompress
+              create 0640 root root
+              postrotate
+                  /bin/kill -HUP `cat /var/run/rsyslogd.pid 2> /dev/null` 2> /dev/null || true
+              endscript
+          }
+        dest: "{{ logrotate_conf_dir }}/custom-apps"
+        owner: root
+        group: root
+        mode: '0644'
+    
+    - name: Configure high-volume log rotation (for central server)
+      copy:
+        content: |
+          # High-volume logs - shorter retention
+          /var/log/remote/*/*.log {
+              daily
+              rotate {{ large_log_retention_days }}
+              missingok
+              notifempty
+              compress
+              delaycompress
+              create 0640 root root
+              maxsize 100M
+              postrotate
+                  /bin/kill -HUP `cat /var/run/rsyslogd.pid 2> /dev/null` 2> /dev/null || true
+              endscript
+          }
+        dest: "{{ logrotate_conf_dir }}/remote-logs"
+        owner: root
+        group: root
+        mode: '0644'
+      when: inventory_hostname in groups['logging_servers']
+    
+    - name: Create logrotate status directory
+      file:
+        path: /var/lib/logrotate
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+    
+    - name: Configure logrotate cron job
+      cron:
+        name: "Daily log rotation"
+        minute: "0"
+        hour: "2"
+        job: "/usr/sbin/logrotate /etc/logrotate.conf"
+        user: root
+    
+    - name: Create log cleanup script for old compressed logs
+      copy:
+        content: |
+          #!/bin/bash
+          # Cleanup script for very old compressed logs
+          
+          LOG_DIRS="/var/log /var/log/remote"
+          MAX_AGE_DAYS=90
+          
+          echo "Starting log cleanup - $(date)"
+          
+          for dir in $LOG_DIRS; do
+              if [ -d "$dir" ]; then
+                  echo "Cleaning up logs older than $MAX_AGE_DAYS days in $dir"
+                  find "$dir" -name "*.gz" -type f -mtime +$MAX_AGE_DAYS -delete
+                  find "$dir" -name "*.bz2" -type f -mtime +$MAX_AGE_DAYS -delete
+                  
+                  # Clean up empty directories
+                  find "$dir" -type d -empty -delete 2>/dev/null || true
+              fi
+          done
+          
+          echo "Log cleanup completed - $(date)"
+        dest: /usr/local/bin/log-cleanup.sh
+        owner: root
+        group: root
+        mode: '0755'
+    
+    - name: Schedule weekly log cleanup
+      cron:
+        name: "Weekly old log cleanup"
+        minute: "0"
+        hour: "3"
+        weekday: "0"
+        job: "/usr/local/bin/log-cleanup.sh >> /var/log/log-cleanup.log 2>&1"
+        user: root
