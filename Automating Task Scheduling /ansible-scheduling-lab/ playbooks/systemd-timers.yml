@@ -1,0 +1,152 @@
+---
+- name: Configure Systemd Timers
+  hosts: all
+  become: yes
+  vars:
+    timer_directory: /etc/systemd/system
+    script_directory: /usr/local/bin
+    
+  tasks:
+    - name: Create backup script for systemd timer
+      copy:
+        content: |
+          #!/bin/bash
+          BACKUP_DIR="/backup/systemd"
+          DATE=$(date +%Y%m%d_%H%M%S)
+          
+          mkdir -p $BACKUP_DIR
+          
+          # Backup important system files
+          tar -czf $BACKUP_DIR/system_backup_$DATE.tar.gz \
+              /etc/passwd /etc/group /etc/hosts /etc/fstab \
+              2>/dev/null || true
+          
+          # Log the backup
+          echo "System backup completed: $DATE" >> /var/log/systemd-backup.log
+          
+          # Cleanup old backups (keep last 10)
+          ls -t $BACKUP_DIR/system_backup_*.tar.gz | tail -n +11 | xargs rm -f
+        dest: "{{ script_directory }}/systemd-backup.sh"
+        mode: '0755'
+        owner: root
+        group: root
+    
+    - name: Create systemd service file for backup
+      copy:
+        content: |
+          [Unit]
+          Description=System Backup Service
+          After=multi-user.target
+          
+          [Service]
+          Type=oneshot
+          ExecStart={{ script_directory }}/systemd-backup.sh
+          User=root
+          StandardOutput=journal
+          StandardError=journal
+        dest: "{{ timer_directory }}/system-backup.service"
+        owner: root
+        group: root
+        mode: '0644'
+    
+    - name: Create systemd timer file for backup
+      copy:
+        content: |
+          [Unit]
+          Description=Run system backup daily
+          Requires=system-backup.service
+          
+          [Timer]
+          OnCalendar=daily
+          RandomizedDelaySec=1800
+          Persistent=true
+          
+          [Install]
+          WantedBy=timers.target
+        dest: "{{ timer_directory }}/system-backup.timer"
+        owner: root
+        group: root
+        mode: '0644'
+    
+    - name: Create monitoring script
+      copy:
+        content: |
+          #!/bin/bash
+          LOG_FILE="/var/log/system-monitor.log"
+          
+          # Check disk usage
+          DISK_USAGE=$(df / | awk 'NR==2 {print $5}' | sed 's/%//')
+          if [ $DISK_USAGE -gt 80 ]; then
+              echo "$(date): WARNING - Disk usage is ${DISK_USAGE}%" >> $LOG_FILE
+          fi
+          
+          # Check memory usage
+          MEM_USAGE=$(free | awk 'NR==2{printf "%.0f", $3*100/$2}')
+          if [ $MEM_USAGE -gt 90 ]; then
+              echo "$(date): WARNING - Memory usage is ${MEM_USAGE}%" >> $LOG_FILE
+          fi
+          
+          # Check load average
+          LOAD_AVG=$(uptime | awk '{print $10}' | cut -d',' -f1)
+          if (( $(echo "$LOAD_AVG > 2.0" | bc -l) )); then
+              echo "$(date): WARNING - High load average: $LOAD_AVG" >> $LOG_FILE
+          fi
+          
+          echo "$(date): System monitoring completed" >> $LOG_FILE
+        dest: "{{ script_directory }}/system-monitor.sh"
+        mode: '0755'
+        owner: root
+        group: root
+    
+    - name: Create systemd service file for monitoring
+      copy:
+        content: |
+          [Unit]
+          Description=System Monitoring Service
+          After=multi-user.target
+          
+          [Service]
+          Type=oneshot
+          ExecStart={{ script_directory }}/system-monitor.sh
+          User=root
+          StandardOutput=journal
+          StandardError=journal
+        dest: "{{ timer_directory }}/system-monitor.service"
+        owner: root
+        group: root
+        mode: '0644'
+    
+    - name: Create systemd timer file for monitoring (every 15 minutes)
+      copy:
+        content: |
+          [Unit]
+          Description=Run system monitoring every 15 minutes
+          Requires=system-monitor.service
+          
+          [Timer]
+          OnBootSec=15min
+          OnUnitActiveSec=15min
+          Persistent=true
+          
+          [Install]
+          WantedBy=timers.target
+        dest: "{{ timer_directory }}/system-monitor.timer"
+        owner: root
+        group: root
+        mode: '0644'
+    
+    - name: Reload systemd daemon
+      systemd:
+        daemon_reload: yes
+    
+    - name: Enable and start backup timer
+      systemd:
+        name: system-backup.timer
+        enabled: yes
+        state: started
+    
+    - name: Enable and start monitoring timer
+      systemd:
+        name: system-monitor.timer
+        enabled: yes
+        state: started
