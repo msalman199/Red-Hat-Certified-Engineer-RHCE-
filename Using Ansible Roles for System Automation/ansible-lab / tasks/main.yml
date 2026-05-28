@@ -1,0 +1,42 @@
+---
+# Main tasks for user management role
+- name: Ensure required groups exist
+  group:
+    name: "{{ item }}"
+    state: present
+  loop: "{{ default_groups }}"
+  when: default_groups is defined and default_groups | length > 0
+
+- name: Create users
+  user:
+    name: "{{ item.name }}"
+    password: "{{ item.password | default(omit) }}"
+    shell: "{{ item.shell | default(default_shell) }}"
+    groups: "{{ item.groups | default(default_groups) | join(',') }}"
+    create_home: "{{ item.create_home | default(create_home) }}"
+    state: present
+  loop: "{{ users_to_create }}"
+  when: users_to_create is defined
+  no_log: true
+
+- name: Set up SSH keys for users
+  authorized_key:
+    user: "{{ item.name }}"
+    key: "{{ item.ssh_key }}"
+    state: present
+  loop: "{{ users_to_create }}"
+  when: 
+    - users_to_create is defined
+    - item.ssh_key is defined
+
+- name: Remove users
+  user:
+    name: "{{ item }}"
+    state: absent
+    remove: true
+  loop: "{{ users_to_remove }}"
+  when: users_to_remove is defined
+
+- name: Display user creation summary
+  debug:
+    msg: "User management completed. Created {{ users_to_create | length }} users, removed {{ users_to_remove | length }} users."
