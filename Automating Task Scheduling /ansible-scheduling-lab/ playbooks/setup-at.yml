@@ -1,0 +1,25 @@
+---
+- name: Setup At Service
+  hosts: all
+  become: yes
+  
+  tasks:
+    - name: Install at package
+      package:
+        name: at
+        state: present
+    
+    - name: Start and enable atd service
+      systemd:
+        name: atd
+        state: started
+        enabled: yes
+    
+    - name: Check atd service status
+      systemd:
+        name: atd
+      register: atd_status
+    
+    - name: Display atd status
+      debug:
+        msg: "ATD service is {{ atd_status.status.ActiveState }}"
