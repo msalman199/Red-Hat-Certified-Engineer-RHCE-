@@ -1,0 +1,5 @@
+[selinux_servers]
+localhost ansible_connection=local
+
+[selinux_servers:vars]
+ansible_python_interpreter=/usr/bin/python3
