@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ server_name }} - Deployed with Ansible</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            color: #333;
+            border-bottom: 2px solid #007acc;
+            padding-bottom: 10px;
+        }
+        .info {
+            margin: 20px 0;
+            padding: 15px;
+            background-color: #e7f3ff;
+            border-left: 4px solid #007acc;
+        }
+        .success {
+            color: #28a745;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 Web Server Successfully Deployed!</h1>
+            <h2>{{ server_name }}</h2>
+        </div>
+        
+        <div class="info">
+            <h3>Server Information:</h3>
+            <ul>
+                <li><strong>Hostname:</strong> {{ inventory_hostname }}</li>
+                <li><strong>IP Address:</strong> {{ ansible_default_ipv4.address }}</li>
+                <li><strong>Operating System:</strong> {{ ansible_distribution }} {{ ansible_distribution_version }}</li>
+                <li><strong>Architecture:</strong> {{ ansible_architecture }}</li>
+                <li><strong>Deployment Time:</strong> {{ ansible_date_time.iso8601 }}</li>
+            </ul>
+        </div>
+        
+        <div class="info">
+            <h3>Deployment Details:</h3>
+            <ul>
+                <li><strong>Deployed by:</strong> Ansible Automation</li>
+                <li><strong>Web Server:</strong> Apache HTTP Server</li>
+                <li><strong>Document Root:</strong> {{ document_root }}</li>
+                <li><strong>Port:</strong> {{ web_server_port }}</li>
+            </ul>
+        </div>
+        
+        <div class="success">
+            <p>✅ This server was deployed and configured automatically using Ansible!</p>
+            <p>🔧 Configuration is idempotent and consistent across all environments.</p>
+        </div>
+    </div>
+</body>
+</html>
