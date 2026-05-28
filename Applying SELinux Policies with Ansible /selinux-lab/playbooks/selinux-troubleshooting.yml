@@ -1,0 +1,99 @@
+---
+- name: SELinux Troubleshooting and Monitoring
+  hosts: selinux_servers
+  become: yes
+  
+  tasks:
+    - name: Install SELinux troubleshooting tools
+      package:
+        name:
+          - setroubleshoot-server
+          - policycoreutils-python-utils
+          - setools-console
+        state: present
+    
+    - name: Check SELinux status and mode
+      command: sestatus
+      register: selinux_status
+      changed_when: false
+      
+    - name: Display SELinux status
+      debug:
+        msg: "{{ selinux_status.stdout_lines }}"
+    
+    - name: Check for recent SELinux denials
+      command: ausearch -m avc -ts today
+      register: recent_denials
+      changed_when: false
+      ignore_errors: yes
+      
+    - name: Display recent denials summary
+      debug:
+        msg: "Found {{ recent_denials.stdout_lines | length }} recent SELinux denial entries"
+      when: recent_denials.stdout_lines is defined
+    
+    - name: Generate SELinux policy module for common issues
+      shell: |
+        ausearch -m avc -ts recent | audit2allow -M local_policy
+      register: policy_generation
+      changed_when: false
+      ignore_errors: yes
+      
+    - name: Show generated policy (if any)
+      debug:
+        msg: "Policy generation output: {{ policy_generation.stdout_lines }}"
+      when: policy_generation.stdout_lines is defined and policy_generation.stdout_lines | length > 0
+    
+    - name: Check SELinux boolean status
+      command: getsebool -a | grep -E "(httpd|samba|ftp|nfs)"
+      register: service_booleans
+      changed_when: false
+      ignore_errors: yes
+      
+    - name: Display service-related booleans
+      debug:
+        msg: "Service booleans: {{ service_booleans.stdout_lines }}"
+      when: service_booleans.stdout_lines is defined
+    
+    - name: List custom SELinux modules
+      command: semodule -l | grep -v "^[a-z]*\s*pp"
+      register: custom_modules
+      changed_when: false
+      ignore_errors: yes
+      
+    - name: Display custom modules
+      debug:
+        msg: "Custom SELinux modules: {{ custom_modules.stdout_lines }}"
+      when: custom_modules.stdout_lines is defined and custom_modules.stdout_lines | length > 0
+    
+    - name: Create SELinux monitoring script
+      copy:
+        content: |
+          #!/bin/bash
+          echo "=== SELinux Status Report ==="
+          echo "Date: $(date)"
+          echo "SELinux Status: $(sestatus | grep 'SELinux status')"
+          echo "Current Mode: $(getenforce)"
+          echo ""
+          echo "=== Recent Denials ==="
+          ausearch -m avc -ts today 2>/dev/null | tail -10 || echo "No recent denials found"
+          echo ""
+          echo "=== Custom File Contexts ==="
+          semanage fcontext -l -C
+          echo ""
+          echo "=== Custom Ports ==="
+          semanage port -l -C
+          echo ""
+          echo "=== Modified Booleans ==="
+          semanage boolean -l -C
+        dest: /usr/local/bin/selinux-report.sh
+        mode: '0755'
+    
+    - name: Run SELinux monitoring script
+      command: /usr/local/bin/selinux-report.sh
+      register: selinux_report
+      changed_when: false
+      
+    - name: Display SELinux report
+      debug:
+        msg: "{{ selinux_report.stdout_lines }}"
