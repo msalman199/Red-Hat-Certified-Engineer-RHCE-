@@ -1,0 +1,73 @@
+---
+- name: Advanced Firewall Configuration
+  hosts: all
+  become: yes
+  
+  tasks:
+    - name: Create custom firewall zone for DMZ
+      firewalld:
+        zone: dmz
+        permanent: yes
+        state: present
+        immediate: yes
+    
+    - name: Configure rate limiting for SSH
+      firewalld:
+        rich_rule: 'rule service name="ssh" accept limit value="3/m"'
+        permanent: yes
+        state: enabled
+        immediate: yes
+        zone: public
+    
+    - name: Block specific IP range
+      firewalld:
+        rich_rule: 'rule family="ipv4" source address="10.0.0.0/8" drop'
+        permanent: yes
+        state: enabled
+        immediate: yes
+        zone: public
+    
+    - name: Allow ICMP ping with rate limiting
+      firewalld:
+        rich_rule: 'rule protocol value="icmp" accept limit value="10/s"'
+        permanent: yes
+        state: enabled
+        immediate: yes
+        zone: public
+    
+    - name: Configure port forwarding for web server
+      firewalld:
+        rich_rule: 'rule family="ipv4" forward-port port="80" protocol="tcp" to-port="8080"'
+        permanent: yes
+        state: enabled
+        immediate: yes
+        zone: public
+      when: inventory_hostname == 'web-server'
+    
+    - name: Create service definition for custom application
+      copy:
+        content: |
+          <?xml version="1.0" encoding="utf-8"?>
+          <service>
+            <short>Custom App</short>
+            <description>Custom application service</description>
+            <port protocol="tcp" port="9090"/>
+            <port protocol="udp" port="9091"/>
+          </service>
+        dest: /etc/firewalld/services/custom-app.xml
+        mode: '0644'
+      notify: reload firewalld
+    
+    - name: Enable custom service
+      firewalld:
+        service: custom-app
+        permanent: yes
+        state: enabled
+        immediate: yes
+        zone: dmz
+  
+  handlers:
+    - name: reload firewalld
+      systemd:
+        name: firewalld
+        state: reloaded
