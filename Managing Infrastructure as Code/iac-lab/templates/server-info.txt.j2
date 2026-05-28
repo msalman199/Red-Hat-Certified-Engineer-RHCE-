@@ -1,0 +1,40 @@
+Server Information Report
+========================
+Generated: {{ ansible_date_time.iso8601 }}
+Project: {{ project_name }}
+Environment: {{ environment }}
+
+Server Details:
+- Hostname: {{ inventory_hostname }}
+- IP Address: {{ ansible_default_ipv4.address }}
+- Operating System: {{ ansible_distribution }} {{ ansible_distribution_version }}
+- Architecture: {{ ansible_architecture }}
+- CPU Cores: {{ ansible_processor_vcpus }}
+- Memory: {{ ansible_memtotal_mb }} MB
+
+{% if inventory_hostname in groups['webservers'] %}
+Web Server Configuration:
+- Package: {{ web_server_package }}
+- Port: {{ web_server_port }}
+- SSL Port: {{ web_server_ssl_port }}
+- Application: {{ app_name }} v{{ app_version }}
+- Max Connections: {{ max_connections }}
+{% endif %}
+
+{% if inventory_hostname in groups['databases'] %}
+Database Configuration:
+- Engine: {{ db_engine }}
+- Version: {{ db_version }}
+- Port: {{ db_port }}
+- Database: {{ db_name }}
+- Max Connections: {{ max_connections }}
+{% endif %}
+
+{% if inventory_hostname in groups['loadbalancers'] %}
+Load Balancer Configuration:
+- Algorithm: {{ lb_algorithm }}
+- Health Check Interval: {{ lb_health_check_interval }}s
+- Backend Servers: {{ backend_servers | length }}
+{% endif %}
+
+Contact: {{ admin_email }}
