@@ -1,0 +1,18 @@
+---
+- name: "{{ check_phase | title }} - Gather system information"
+  setup:
+
+- name: "{{ check_phase | title }} - Check disk usage"
+  shell: df -h | awk 'NR>1 {print $5 " " $6}' | sed 's/%//'
+  register: disk_usage
+  changed_when: false
+
+- name: "{{ check_phase | title }} - Check memory usage"
+  shell: free | grep Mem | awk '{printf "%.2f", ($3/$2) * 100.0}'
+  register: memory_usage
+  changed_when: false
+
+- name: "{{ check_phase | title }} - Check system load"
+  shell: uptime | awk -F'load average:' '{print $2}' | awk '{print $1}' | sed 's/,//'
+  register: load_average
+  changed_when:
