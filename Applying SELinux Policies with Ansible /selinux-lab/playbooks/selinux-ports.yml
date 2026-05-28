@@ -1,0 +1,71 @@
+---
+- name: Manage SELinux Port Policies
+  hosts: selinux_servers
+  become: yes
+  
+  tasks:
+    - name: Check current SELinux port assignments
+      command: semanage port -l
+      register: current_ports
+      changed_when: false
+      
+    - name: Show HTTP-related port assignments
+      debug:
+        msg: "{{ current_ports.stdout_lines | select('match', '.*http.*') | list }}"
+    
+    - name: Add custom port for HTTP service
+      seport:
+        ports: 8080
+        proto: tcp
+        setype: http_port_t
+        state: present
+      register: http_custom_port
+      
+    - name: Add custom port for SSH service
+      seport:
+        ports: 2222
+        proto: tcp
+        setype: ssh_port_t
+        state: present
+      register: ssh_custom_port
+      
+    - name: Add range of ports for custom application
+      seport:
+        ports: 9000-9010
+        proto: tcp
+        setype: http_port_t
+        state: present
+      register: custom_app_ports
+      
+    - name: Display port assignment results
+      debug:
+        msg: "Port assignment for {{ item.name }}: {{ item.result.changed }}"
+      loop:
+        - { name: "HTTP 8080", result: "{{ http_custom_port }}" }
+        - { name: "SSH 2222", result: "{{ ssh_custom_port }}" }
+        - { name: "Custom App 9000-9010", result: "{{ custom_app_ports }}" }
+    
+    - name: Verify new port assignments
+      command: semanage port -l | grep -E "(8080|2222|900[0-9])"
+      register: verify_ports
+      changed_when: false
+      ignore_errors: yes
+      
+    - name: Show verified port assignments
+      debug:
+        msg: "New port assignments: {{ verify_ports.stdout_lines }}"
+      when: verify_ports.stdout_lines is defined
+      
+    - name: Remove a port assignment (example)
+      seport:
+        ports: 9010
+        proto: tcp
+        setype: http_port_t
+        state: absent
+      register: remove_port
+      ignore_errors: yes
+      
+    - name: Show removal result
+      debug:
+        msg: "Port 9010 removal: {{ remove_port.changed }}"
+      when: remove_port is defined
