@@ -1,0 +1,49 @@
+---
+- name: Verify All Scheduled Tasks
+  hosts: all
+  become: yes
+  
+  tasks:
+    - name: Check cron jobs
+      shell: crontab -l
+      register: cron_jobs
+      failed_when: false
+    
+    - name: Display cron jobs
+      debug:
+        msg: "Cron jobs: {{ cron_jobs.stdout_lines }}"
+      when: cron_jobs.stdout_lines is defined
+    
+    - name: Check at jobs
+      shell: atq
+      register: at_jobs
+      failed_when: false
+    
+    - name: Display at jobs
+      debug:
+        msg: "At jobs: {{ at_jobs.stdout_lines }}"
+      when: at_jobs.stdout_lines is defined
+    
+    - name: Check systemd timers
+      shell: systemctl list-timers --no-pager
+      register: systemd_timers
+    
+    - name: Display systemd timers
+      debug:
+        msg: "Systemd timers: {{ systemd_timers.stdout_lines }}"
+    
+    - name: Check timer service status
+      shell: systemctl is-active {{ item }}
+      register: timer_status
+      failed_when: false
+      loop:
+        - system-backup.timer
+        - system-monitor.timer
+        - webapp-maintenance.timer
+        - custom-logrotate.timer
+    
+    - name: Display timer status
+      debug:
+        msg: "Timer {{ item.item }} is {{ item.stdout }}"
+      loop: "{{ timer_status.results }}"
+      when: item.stdout is defined
