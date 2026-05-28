@@ -1,0 +1,79 @@
+---
+- name: Configure File Permissions and Access Control
+  hosts: all
+  become: yes
+  
+  tasks:
+    - name: Set secure permissions on sensitive files
+      file:
+        path: "{{ item.path }}"
+        owner: "{{ item.owner }}"
+        group: "{{ item.group }}"
+        mode: "{{ item.mode }}"
+      loop:
+        - { path: '/etc/passwd', owner: 'root', group: 'root', mode: '0644' }
+        - { path: '/etc/shadow', owner: 'root', group: 'shadow', mode: '0640' }
+        - { path: '/etc/group', owner: 'root', group: 'root', mode: '0644' }
+        - { path: '/etc/gshadow', owner: 'root', group: 'shadow', mode: '0640' }
+        - { path: '/etc/ssh/sshd_config', owner: 'root', group: 'root', mode: '0600' }
+
+    - name: Create secure directories for applications
+      file:
+        path: "{{ item.path }}"
+        state: directory
+        owner: "{{ item.owner }}"
+        group: "{{ item.group }}"
+        mode: "{{ item.mode }}"
+      loop:
+        - { path: '/var/log/secure-apps', owner: 'root', group: 'root', mode: '0750' }
+        - { path: '/etc/security/custom', owner: 'root', group: 'root', mode: '0700' }
+        - { path: '/var/lib/webapp', owner: 'webapp', group: 'webapp', mode: '0750' }
+      when: inventory_hostname in groups['webservers']
+
+    - name: Configure ACLs for shared directories
+      acl:
+        path: /var/log/secure-apps
+        entity: webadmin
+        etype: user
+        permissions: rw
+        state: present
+      when: inventory_hostname in groups['webservers']
+
+    - name: Set immutable attribute on critical files
+      file:
+        path: "{{ item }}"
+        attributes: +i
+      loop:
+        - /etc/passwd
+        - /etc/group
+      ignore_errors: yes
+
+    - name: Configure log rotation for security logs
+      copy:
+        content: |
+          /var/log/secure {
+              weekly
+              rotate 52
+              compress
+              delaycompress
+              missingok
+              notifempty
+              create 0600 root root
+          }
+        dest: /etc/logrotate.d/security-logs
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Verify file permissions
+      command: ls -la {{ item }}
+      loop:
+        - /etc/passwd
+        - /etc/shadow
+        - /etc/ssh/sshd_config
+      register: file_perms
+      changed_when: false
+
+    - name: Display file permissions
+      debug:
+        var: file_perms.results
