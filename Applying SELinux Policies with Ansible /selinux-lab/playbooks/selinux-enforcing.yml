@@ -1,0 +1,52 @@
+---
+- name: Configure SELinux to Enforcing Mode
+  hosts: selinux_servers
+  become: yes
+  vars:
+    selinux_policy: targeted
+    selinux_state: enforcing
+  
+  tasks:
+    - name: Check current SELinux status
+      command: sestatus
+      register: selinux_status
+      changed_when: false
+      
+    - name: Display current SELinux status
+      debug:
+        msg: "Current SELinux status: {{ selinux_status.stdout_lines }}"
+    
+    - name: Install SELinux management tools
+      package:
+        name:
+          - policycoreutils
+          - policycoreutils-python-utils
+          - selinux-policy
+          - selinux-policy-targeted
+          - setroubleshoot-server
+          - setools-console
+        state: present
+    
+    - name: Set SELinux to enforcing mode
+      selinux:
+        policy: "{{ selinux_policy }}"
+        state: "{{ selinux_state }}"
+      register: selinux_change
+      
+    - name: Display SELinux change status
+      debug:
+        msg: "SELinux state changed: {{ selinux_change.changed }}"
+        
+    - name: Verify SELinux is in enforcing mode
+      command: getenforce
+      register: enforce_check
+      changed_when: false
+      
+    - name: Confirm enforcing mode
+      debug:
+        msg: "SELinux is now in: {{ enforce_check.stdout }} mode"
+      
+    - name: Check if reboot is required
+      debug:
+        msg: "Reboot required: {{ selinux_change.reboot_required | default(false) }}"
+      when: selinux_change.reboot_required is defined
