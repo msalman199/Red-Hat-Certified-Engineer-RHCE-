@@ -1,0 +1,161 @@
+---
+- name: Automated System Reboot with Health Checks
+  hosts: all
+  become: yes
+  serial: 1  # Reboot one host at a time
+  vars:
+    reboot_timeout: 600
+    pre_reboot_checks:
+      - check_disk_space
+      - check_running_services
+      - backup_critical_data
+    post_reboot_checks:
+      - verify_system_boot
+      - check_services_status
+      - validate_network_connectivity
+    
+  tasks:
+    - name: Pre-reboot - Check if reboot is required
+      stat:
+        path: /var/run/reboot-required
+      register: reboot_needed
+    
+    - name: Pre-reboot - Display reboot requirement status
+      debug:
+        msg: "Reboot {{ 'is' if reboot_needed.stat.exists else 'is not' }} required"
+    
+    - name: Pre-reboot - Check disk space
+      shell: df -h / | tail -1 | awk '{print $5}' | sed 's/%//'
+      register: root_disk_usage
+      changed_when: false
+    
+    - name: Pre-reboot - Verify sufficient disk space
+      fail:
+        msg: "Insufficient disk space for safe reboot. Root partition is {{ root_disk_usage.stdout }}% full"
+      when: root_disk_usage.stdout | int > 90
+    
+    - name: Pre-reboot - Get list of running services
+      shell: systemctl list-units --type=service --state=running --no-legend | awk '{print $1}'
+      register: running_services_before
+      changed_when: false
+    
+    - name: Pre-reboot - Create service backup list
+      copy:
+        content: "{{ running_services_before.stdout }}"
+        dest: /tmp/services-before-reboot.txt
+        owner: root
+        group: root
+        mode: '0644'
+    
+    - name: Pre-reboot - Sync filesystem
+      command: sync
+      changed_when: false
+    
+    - name: Pre-reboot - Create reboot timestamp
+      copy:
+        content: "{{ ansible_date_time.iso8601 }}"
+        dest: /tmp/reboot-timestamp.txt
+        owner: root
+        group: root
+        mode: '0644'
+    
+    - name: Perform system reboot
+      reboot:
+        reboot_timeout: "{{ reboot_timeout }}"
+        pre_reboot_delay: 10
+        post_reboot_delay: 30
+        test_command: uptime
+      when: reboot_needed.stat.exists or force_reboot | default(false)
+    
+    - name: Post-reboot - Wait for system to be fully ready
+      wait_for_connection:
+        timeout: 300
+        delay: 30
+    
+    - name: Post-reboot - Verify system boot time
+      shell: uptime -s
+      register: boot_time
+      changed_when: false
+    
+    - name: Post-reboot - Check if reboot was successful
+      stat:
+        path: /tmp/reboot-timestamp.txt
+      register: reboot_timestamp_file
+    
+    - name: Post-reboot - Compare boot time with reboot timestamp
+      shell: |
+        reboot_time=$(cat /tmp/reboot-timestamp.txt)
+        boot_time=$(uptime -s)
+        if [[ "$boot_time" > "$reboot_time" ]]; then
+          echo "Reboot successful"
+        else
+          echo "Reboot may have failed"
+        fi
+      register: reboot_verification
+      changed_when: false
+      when: reboot_timestamp_file.stat.exists
+    
+    - name: Post-reboot - Get current running services
+      shell: systemctl list-units --type=service --state=running --no-legend | awk '{print $1}'
+      register: running_services_after
+      changed_when: false
+    
+    - name: Post-reboot - Compare service states
+      shell: |
+        if [ -f /tmp/services-before-reboot.txt ]; then
+          comm -23 <(sort /tmp/services-before-reboot.txt) <(echo "{{ running_services_after.stdout }}" | sort) > /tmp/missing-services.txt
+          missing_count=$(wc -l < /tmp/missing-services.txt)
+          echo "Missing services: $missing_count"
+          if [ $missing_count -gt 0 ]; then
+            echo "Services that failed to start:"
+            cat /tmp/missing-services.txt
+          fi
+        fi
+      register: service_comparison
+      changed_when: false
+    
+    - name: Post-reboot - Test network connectivity
+      uri:
+        url: http://www.google.com
+        method: HEAD
+        timeout: 10
+      delegate_to: localhost
+      register: network_test
+      ignore_errors: yes
+    
+    - name: Post-reboot - Verify critical services
+      systemd:
+        name: "{{ item }}"
+      register: critical_services_status
+      loop:
+        - sshd
+        - chronyd
+        - NetworkManager
+      ignore_errors: yes
+    
+    - name: Post-reboot - Generate reboot report
+      template:
+        src: reboot-report.j2
+        dest: "/var/log/reboot-report-{{ ansible_date_time.epoch }}.txt"
+        owner: root
+        group: root
+        mode: '0644'
+    
+    - name: Post-reboot - Clean up temporary files
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /tmp/services-before-reboot.txt
+        - /tmp/missing-services.txt
+        - /tmp/reboot-timestamp.txt
+        - /var/run/reboot-required
+    
+    - name: Post-reboot - Display reboot summary
+      debug:
+        msg: |
+          Reboot Summary for {{ ansible_hostname }}:
+          - Boot time: {{ boot_time.stdout }}
+          - Reboot verification: {{ reboot_verification.stdout | default('N/A') }}
+          - Network connectivity: {{ 'OK' if network_test.status == 200 else 'FAILED' }}
+          - Service status: {{ service_comparison.stdout_lines | join(' ') }}
