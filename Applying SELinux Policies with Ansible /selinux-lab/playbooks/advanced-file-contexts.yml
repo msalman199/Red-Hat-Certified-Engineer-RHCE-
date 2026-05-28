@@ -1,0 +1,73 @@
+---
+- name: Advanced SELinux File Context Management
+  hosts: selinux_servers
+  become: yes
+  
+  tasks:
+    - name: Create database directory structure
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+        owner: root
+        group: root
+      loop:
+        - /opt/database
+        - /opt/database/data
+        - /opt/database/logs
+        - /opt/database/config
+    
+    - name: Set database data directory context
+      sefcontext:
+        target: "/opt/database/data(/.*)?"
+        setype: mysqld_db_t
+        state: present
+      notify: restore database contexts
+        
+    - name: Set database log directory context
+      sefcontext:
+        target: "/opt/database/logs(/.*)?"
+        setype: mysqld_log_t
+        state: present
+      notify: restore database contexts
+        
+    - name: Set database config directory context
+      sefcontext:
+        target: "/opt/database/config(/.*)?"
+        setype: mysqld_etc_t
+        state: present
+      notify: restore database contexts
+    
+    - name: Create sample database files
+      copy:
+        content: "Sample {{ item.type }} content"
+        dest: "{{ item.path }}"
+        mode: '0644'
+      loop:
+        - { path: "/opt/database/data/sample.db", type: "database" }
+        - { path: "/opt/database/logs/error.log", type: "log" }
+        - { path: "/opt/database/config/my.cnf", type: "config" }
+    
+    - name: Remove a file context rule (example)
+      sefcontext:
+        target: "/tmp/old-app(/.*)?"
+        state: absent
+      ignore_errors: yes
+      
+    - name: Verify all database contexts are correct
+      command: ls -Z {{ item }}
+      register: db_contexts
+      changed_when: false
+      loop:
+        - /opt/database/data
+        - /opt/database/logs
+        - /opt/database/config
+        
+    - name: Display database contexts
+      debug:
+        msg: "{{ item.item }} contexts: {{ item.stdout_lines }}"
+      loop: "{{ db_contexts.results }}"
+  
+  handlers:
+    - name: restore database contexts
+      command: restorecon -R /opt/database
