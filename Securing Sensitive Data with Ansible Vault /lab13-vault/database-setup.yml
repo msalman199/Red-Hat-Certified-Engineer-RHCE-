@@ -1,0 +1,33 @@
+---
+- name: Configure Database Connection
+  hosts: localhost
+  vars_files:
+    - secrets.yml
+  tasks:
+    - name: Create database configuration file
+      copy:
+        content: |
+          [database]
+          host={{ db_host }}
+          port={{ db_port }}
+          username={{ db_username }}
+          password={{ db_password }}
+          
+          [api]
+          key={{ api_key }}
+          token={{ secret_token }}
+        dest: /tmp/app-config.ini
+        mode: '0600'
+      
+    - name: Display configuration file location
+      debug:
+        msg: "Database configuration created at /tmp/app-config.ini"
+    
+    - name: Verify file permissions
+      stat:
+        path: /tmp/app-config.ini
+      register: config_file
+    
+    - name: Show file permissions
+      debug:
+        msg: "File permissions: {{ config_file.stat.mode }}"
