@@ -1,0 +1,28 @@
+---
+- name: Demonstrate Variable Precedence in Roles
+  hosts: node1
+  become: true
+  
+  vars:
+    # Playbook variables (high precedence)
+    default_shell: /bin/zsh
+    
+  roles:
+    - role: user_management
+      vars:
+        # Role variables (highest precedence)
+        users_to_create:
+          - name: demo_user
+            shell: /bin/bash  # This overrides default_shell
+            groups: ['wheel']
+      tags: ['users']
+    
+    - role: file_management
+      vars:
+        files_to_create:
+          - dest: /tmp/role_demo.txt
+            content: |
+              This file was created by the file_management role.
+              Default shell setting: {{ default_shell }}
+              Current user: {{ ansible_user }}
+      tags: ['files']
