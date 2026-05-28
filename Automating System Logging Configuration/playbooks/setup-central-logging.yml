@@ -1,0 +1,119 @@
+---
+- name: Configure Central Logging Server
+  hosts: logging_servers
+  become: yes
+  vars:
+    remote_log_dir: /var/log/remote
+    rsyslog_port: 514
+    max_log_size: "100M"
+    
+  tasks:
+    - name: Create remote log directory structure
+      file:
+        path: "{{ remote_log_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+    
+    - name: Configure firewall for syslog ports
+      firewalld:
+        port: "{{ rsyslog_port }}/udp"
+        permanent: yes
+        state: enabled
+        immediate: yes
+      ignore_errors: yes
+    
+    - name: Configure firewall for syslog TCP
+      firewalld:
+        port: "{{ rsyslog_port }}/tcp"
+        permanent: yes
+        state: enabled
+        immediate: yes
+      ignore_errors: yes
+    
+    - name: Create central server rsyslog configuration
+      copy:
+        content: |
+          # Central logging server configuration
+          # Enable UDP and TCP reception
+          module(load="imudp")
+          module(load="imtcp")
+          
+          # Listen on all interfaces
+          input(type="imudp" port="{{ rsyslog_port }}" address="0.0.0.0")
+          input(type="imtcp" port="{{ rsyslog_port }}" address="0.0.0.0")
+          
+          # Template for organizing remote logs
+          template(name="RemoteHostLogs" type="string"
+                   string="{{ remote_log_dir }}/%HOSTNAME%/%PROGRAMNAME%.log")
+          
+          template(name="RemoteHostAllLogs" type="string"
+                   string="{{ remote_log_dir }}/%HOSTNAME%/all.log")
+          
+          # Ruleset for remote logs
+          ruleset(name="RemoteLogHandling") {
+              # Log everything to host-specific all.log
+              action(type="omfile" dynaFile="RemoteHostAllLogs")
+              
+              # Log by program to separate files
+              action(type="omfile" dynaFile="RemoteHostLogs")
+              
+              # Stop processing to prevent local logging
+              stop
+          }
+          
+          # Bind ruleset to UDP input
+          input(type="imudp" port="{{ rsyslog_port }}" ruleset="RemoteLogHandling")
+          input(type="imtcp" port="{{ rsyslog_port }}" ruleset="RemoteLogHandling")
+        dest: /etc/rsyslog.d/10-central-server.conf
+        owner: root
+        group: root
+        mode: '0644'
+      notify: restart rsyslog
+    
+    - name: Create log monitoring script
+      copy:
+        content: |
+          #!/bin/bash
+          # Log monitoring script for central server
+          
+          LOG_DIR="{{ remote_log_dir }}"
+          ALERT_SIZE=50000000  # 50MB in bytes
+          
+          echo "=== Central Log Server Status ==="
+          echo "Date: $(date)"
+          echo "Log Directory: $LOG_DIR"
+          echo
+          
+          if [ -d "$LOG_DIR" ]; then
+              echo "Remote hosts logging to this server:"
+              ls -la "$LOG_DIR"
+              echo
+              
+              echo "Large log files (>50MB):"
+              find "$LOG_DIR" -type f -size +50M -exec ls -lh {} \;
+              echo
+              
+              echo "Recent log activity:"
+              find "$LOG_DIR" -type f -mmin -60 -exec echo "Modified in last hour: {}" \;
+          else
+              echo "Remote log directory does not exist!"
+          fi
+        dest: /usr/local/bin/log-monitor.sh
+        owner: root
+        group: root
+        mode: '0755'
+    
+    - name: Create cron job for log monitoring
+      cron:
+        name: "Log server monitoring"
+        minute: "*/30"
+        job: "/usr/local/bin/log-monitor.sh >> /var/log/log-monitor.log 2>&1"
+        user: root
+  
+  handlers:
+    - name: restart rsyslog
+      systemd:
+        name: rsyslog
+        state: restarted
