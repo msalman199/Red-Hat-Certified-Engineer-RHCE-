@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ server_name }} - {{ environment_name }} Environment</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, 
+                {% if environment_name == "Development" %}#e3f2fd, #bbdefb{% endif %}
+                {% if environment_name == "Staging" %}#fff3e0, #ffcc02{% endif %}
+                {% if environment_name == "Production" %}#e8f5e8, #4caf50{% endif %}
+            );
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            color: #333;
+            border-bottom: 3px solid 
+                {% if environment_name == "Development" %}#2196f3{% endif %}
+                {% if environment_name == "Staging" %}#ff9800{% endif %}
+                {% if environment_name == "Production" %}#4caf50{% endif %};
+            padding-bottom: 15px;
+            margin-bottom: 30px;
+        }
+        .env-badge {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            color: white;
+            font-weight: bold;
+            background-color: 
+                {% if environment_name == "Development" %}#2196f3{% endif %}
+                {% if environment_name == "Staging" %}#ff9800{% endif %}
+                {% if environment_name == "Production" %}#4caf50{% endif %};
+        }
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .info-card {
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-left: 4px solid 
+                {% if environment_name == "Development" %}#2196f3{% endif %}
+                {% if environment_name == "Staging" %}#ff9800{% endif %}
+                {% if environment_name == "Production" %}#4caf50{% endif %};
+            border-radius: 5px;
+        }
+        .success {
+            color: #28a745;
+            font-weight: bold;
+            text-align: center;
+            margin-top: 30px;
+            padding: 20px;
+            background-color: #d4edda;
+            border-radius: 10px;
+        }
+        @media (max-width: 768px) {
+            .info-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 Scalable Web Deployment</h1>
+            <h2>{{ server_name }}</h2>
+            <span class="env-badge">{{ environment_name }}</span>
+        </div>
+        
+        <div class="info-grid">
+            <div class="info-card">
+                <h3>🖥️ Server Information</h3>
+                <ul>
+                    <li><strong>Hostname:</strong> {{ inventory_hostname }}</li>
+                    <li><strong>IP Address:</strong> {{ ansible_default_ipv4.address }}</li>
+                    <li><strong>OS:</strong> {{ ansible_distribution }} {{ ansible_distribution_version }}</li>
+                    <li><strong>Architecture:</strong> {{ ansible_architecture }}</li>
+                </ul>
+            </div>
+            
+            <div class="info-card">
+                <h3>⚙️ Configuration</h3>
+                <ul>
+                    <li><strong>Environment:</strong> {{ environment_name }}</li>
+                    <li><strong>Port:</strong> {{ web_server_port }}</li>
+                    <li><strong>Max Connections:</strong> {{ max_connections }}</li>
+                    <li><strong>Debug Mode:</strong> {{ debug_mode | default('N/A') }}</li>
+                </ul>
+            </div>
+            
+            <div class="info-card">
+                <h3>🔧 Performance Settings</h3>
+                <ul>
+                    <li><strong>Worker Processes:</strong> {{ worker_processes | default('N/A') }}</li>
+                    <li><strong>Worker Connections:</strong> {{ worker_connections | default('N/A') }}</li>
+                    <li><strong>Keepalive Timeout:</strong> {{ keepalive_timeout | default('N/A') }}s</li>
+                    <li><strong>Cache Enabled:</strong> {{ cache_enabled | default('N/A') }}</li>
+                </ul>
+            </div>
+            
+            <div class="info-card">
+                <h3>🔒 Security & Monitoring</h3>
+                <ul>
+                    <li><strong>SSL Enabled:</strong> {{ ssl_enabled | default('N/A') }}</li>
+                    <li><strong>Security Headers:</strong> {{ security_headers | default('N/A') }}</li>
+                    <li><strong>Monitoring:</strong> {{ monitoring_enabled | default('N/A') }}</li>
+                    <li><strong>Backup Enabled:</strong> {{ backup_enabled | default('N/A') }}</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="success">
+            <p>✅ Server deployed successfully with environment-specific configuration!</p>
+            <p>🔄 Deployment is idempotent and scalable across environments</p>
+            <p>📊 Configuration optimized for {{ environment_name }} workloads</p>
+            <p>⏰ Deployed: {{ ansible_date_time.iso8601 }}</p>
+        </div>
+    </div>
+</body>
+</html>
