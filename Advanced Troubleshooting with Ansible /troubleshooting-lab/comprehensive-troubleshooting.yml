@@ -1,0 +1,149 @@
+---
+- name: Comprehensive Troubleshooting Scenario
+  hosts: webservers
+  become: yes
+  vars:
+    web_user: webadmin
+    web_group: webadmin
+    app_port: 8080
+    
+  tasks:
+    - name: Debug - Starting comprehensive deployment
+      debug:
+        msg: |
+          Starting deployment on {{ inventory_hostname }}
+          Target user: {{ web_user }}
+          Target group: {{ web_group }}
+          Application port: {{ app_port }}
+          
+    - name: Create web user and group
+      block:
+        - name: Create web group
+          group:
+            name: "{{ web_group }}"
+            state: present
+            
+        - name: Create web user
+          user:
+            name: "{{ web_user }}"
+            group: "{{ web_group }}"
+            home: /home/{{ web_user }}
+            shell: /bin/bash
+            state: present
+            
+      rescue:
+        - name: Debug - User creation failed
+          debug:
+            msg: "Failed to create user {{ web_user }}: {{ ansible_failed_result.msg }}"
+            
+    - name: Install and configure web server
+      block:
+        - name: Install required packages
+          yum:
+            name:
+              - httpd
+              - python3-pip
+              - git
+            state: present
+          register: package_install
+          
+        - name: Debug - Package installation status
+          debug:
+            msg: "Packages installed: {{ package_install.results | map(attribute='name') | list }}"
+            
+        - name: Configure custom port
+          lineinfile:
+            path: /etc/httpd/conf/httpd.conf
+            regexp: '^Listen 80'
+            line: 'Listen {{ app_port }}'
+            backup: yes
+          register: config_change
+          
+        - name: Debug - Configuration change
+          debug:
+            msg: "Configuration modified: {{ config_change.changed }}"
+            
+      rescue:
+        - name: Debug - Web server setup failed
+          debug:
+            msg: "Web server setup failed: {{ ansible_failed_result.msg }}"
+            
+    - name: Deploy application files
+      block:
+        - name: Create application directory
+          file:
+            path: /var/www/myapp
+            state: directory
+            owner: "{{ web_user }}"
+            group: "{{ web_group }}"
+            mode: '0755'
+            
+        - name: Deploy index page
+          template:
+            src: index.html.j2
+            dest: /var/www/myapp/index.html
+            owner: "{{ web_user }}"
+            group: "{{ web_group }}"
+            mode: '0644'
+          register: deploy_result
+          
+        - name: Debug - Deployment result
+          debug:
+            var: deploy_result
+            
+      rescue:
+        - name: Debug - Application deployment failed
+          debug:
+            msg: "Application deployment failed: {{ ansible_failed_result.msg }}"
+            
+    - name: Start and verify services
+      block:
+        - name: Start httpd service
+          systemd:
+            name: httpd
+            state: started
+            enabled: yes
+          register: service_start
+          
+        - name: Debug - Service status
+          debug:
+            msg: "Service started: {{ service_start.changed }}"
+            
+        - name: Verify service is listening
+          wait_for:
+            port: "{{ app_port }}"
+            host: "{{ ansible_default_ipv4.address }}"
+            timeout: 30
+          register: port_check
+          
+        - name: Debug - Port verification
+          debug:
+            msg: "Port {{ app_port }} is accessible on {{ ansible_default_ipv4.address }}"
+            
+      rescue:
+        - name: Debug - Service startup failed
+          debug:
+            msg: "Service startup failed: {{ ansible_failed_result.msg }}"
+            
+    - name: Final system verification
+      block:
+        - name: Check service status
+          command: systemctl status httpd
+          register: service_status
+          
+        - name: Check listening ports
+          command: ss -tlnp | grep {{ app_port }}
+          register: port_status
+          
+        - name: Debug - Final verification
+          debug:
+            msg: |
+              Service Status: {{ service_status.rc == 0 }}
+              Port Listening: {{ port_status.stdout != '' }}
+              
+      always:
+        - name: Debug - Deployment summary
+          debug:
+            msg: |
+              Deployment completed on {{ inventory_hostname }}
+              Check the application at http://{{ ansible_default_ipv4.address }}:{{ app_port }}
