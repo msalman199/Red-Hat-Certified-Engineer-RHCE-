@@ -1,0 +1,52 @@
+---
+- name: Advanced Cron Job Management
+  hosts: webservers
+  become: yes
+  vars:
+    backup_script: /usr/local/bin/backup.sh
+    
+  tasks:
+    - name: Create backup script
+      copy:
+        content: |
+          #!/bin/bash
+          DATE=$(date +%Y%m%d_%H%M%S)
+          BACKUP_DIR="/backup"
+          SOURCE_DIR="/var/www/html"
+          
+          mkdir -p $BACKUP_DIR
+          tar -czf $BACKUP_DIR/website_backup_$DATE.tar.gz $SOURCE_DIR
+          
+          # Keep only last 7 backups
+          find $BACKUP_DIR -name "website_backup_*.tar.gz" -mtime +7 -delete
+          
+          echo "Backup completed: $DATE" >> /var/log/backup.log
+        dest: "{{ backup_script }}"
+        mode: '0755'
+        owner: root
+        group: root
+    
+    - name: Schedule website backup
+      cron:
+        name: "Website backup"
+        minute: "0"
+        hour: "3"
+        job: "{{ backup_script }}"
+        user: root
+        state: present
+        backup: yes
+    
+    - name: Schedule database backup (databases group only)
+      cron:
+        name: "Database backup"
+        minute: "30"
+        hour: "2"
+        job: "mysqldump --all-databases > /backup/db_backup_$(date +\\%Y\\%m\\%d).sql"
+        user: root
+        state: present
+      when: inventory_hostname in groups['databases']
+    
+    - name: Remove old cron job if exists
+      cron:
+        name: "Old cleanup job"
+        state: absent
