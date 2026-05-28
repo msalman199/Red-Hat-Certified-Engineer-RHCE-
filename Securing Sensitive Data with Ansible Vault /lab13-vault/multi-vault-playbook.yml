@@ -1,0 +1,28 @@
+---
+- name: Deploy with Multiple Vault IDs
+  hosts: localhost
+  vars_files:
+    - dev-secrets.yml
+    - prod-secrets-multi.yml
+  tasks:
+    - name: Show development configuration
+      debug:
+        msg: "Dev API Key configured: {{ 'Yes' if dev_api_key is defined else 'No' }}"
+    
+    - name: Show production configuration  
+      debug:
+        msg: "Prod API Key configured: {{ 'Yes' if prod_api_key is defined else 'No' }}"
+    
+    - name: Create combined configuration
+      copy:
+        content: |
+          # Multi-environment configuration
+          [development]
+          database_url={{ dev_database_url }}
+          api_key={{ dev_api_key }}
+          
+          [production]
+          database_url={{ prod_database_url }}
+          api_key={{ prod_api_key }}
+        dest: /tmp/multi-env-config.ini
+        mode: '0600'
