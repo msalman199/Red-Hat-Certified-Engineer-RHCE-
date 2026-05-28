@@ -1,0 +1,27 @@
+---
+# Production Environment Variables
+environment_name: "Production"
+debug_mode: false
+log_level: "warn"
+backup_enabled: true
+monitoring_enabled: true
+
+# Performance settings for production
+worker_processes: 4
+worker_connections: 200
+keepalive_timeout: 65
+
+# Security settings (strict for production)
+ssl_enabled: true
+security_headers: true
+fail2ban_enabled: true
+
+# Application settings
+app_version: "1.2.3"
+database_pool_size: 20
+cache_enabled: true
+cache_ttl: 600
+
+# Backup settings
+backup_schedule: "0 2 * * *"
+backup_retention_days: 30
