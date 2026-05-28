@@ -1,0 +1,30 @@
+# Ansible specific
+*.retry
+.vault_pass
+host_vars/*/vault.yml
+
+# Temporary files
+*.tmp
+*.log
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Backup files
+*.bak
+*.backup
+*~
+
+# Environment specific
+.env
+.env.local
+.env.production
+
+# Generated files
+/tmp/
+/logs/
