@@ -1,0 +1,53 @@
+---
+- name: Configure Log Clients for Central Logging
+  hosts: log_clients
+  become: yes
+  vars:
+    central_server: "{{ hostvars[groups['logging_servers'][0]]['ansible_host'] }}"
+    rsyslog_port: 514
+    
+  tasks:
+    - name: Configure client to forward logs to central server
+      copy:
+        content: |
+          # Forward all logs to central server
+          # Using TCP for reliable delivery
+          *.* @@{{ central_server }}:{{ rsyslog_port }}
+          
+          # Also keep local copies of critical logs
+          *.err                           /var/log/local-errors.log
+          authpriv.*                      /var/log/local-auth.log
+          
+          # Stop processing after forwarding (optional)
+          # Uncomment the next line to prevent local logging
+          # & stop
+        dest: /etc/rsyslog.d/20-forward-to-central.conf
+        owner: root
+        group: root
+        mode: '0644'
+      notify: restart rsyslog
+    
+    - name: Create local error log file
+      file:
+        path: /var/log/local-errors.log
+        state: touch
+        owner: root
+        group: root
+        mode: '0640'
+    
+    - name: Create local auth log file
+      file:
+        path: /var/log/local-auth.log
+        state: touch
+        owner: root
+        group: root
+        mode: '0640'
+    
+    - name: Test log forwarding
+      shell: logger -p local0.info "Test message from {{ inventory_hostname }} - $(date)"
+      
+  handlers:
+    - name: restart rsyslog
+      systemd:
+        name: rsyslog
+        state: restarted
