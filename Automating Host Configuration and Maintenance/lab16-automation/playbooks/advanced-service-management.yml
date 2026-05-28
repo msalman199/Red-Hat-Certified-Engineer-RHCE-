@@ -1,0 +1,64 @@
+---
+- name: Advanced Service Configuration Management
+  hosts: all
+  become: yes
+  vars:
+    web_services:
+      - name: httpd
+        package: httpd
+        config_file: /etc/httpd/conf/httpd.conf
+        port: 80
+      - name: nginx
+        package: nginx
+        config_file: /etc/nginx/nginx.conf
+        port: 8080
+  
+  tasks:
+    - name: Install web server packages
+      yum:
+        name: "{{ item.package }}"
+        state: present
+      loop: "{{ web_services }}"
+      when: ansible_os_family == "RedHat"
+    
+    - name: Create custom index page for Apache
+      copy:
+        content: |
+          <html>
+          <head><title>Automated Configuration</title></head>
+          <body>
+          <h1>Server: {{ ansible_hostname }}</h1>
+          <p>Configured automatically via Ansible</p>
+          <p>Last updated: {{ ansible_date_time.iso8601 }}</p>
+          </body>
+          </html>
+        dest: /var/www/html/index.html
+        owner: apache
+        group: apache
+        mode: '0644'
+      when: "'httpd' in web_services | map(attribute='package') | list"
+    
+    - name: Configure firewall for web services
+      firewalld:
+        port: "{{ item.port }}/tcp"
+        permanent: yes
+        state: enabled
+        immediate: yes
+      loop: "{{ web_services }}"
+      ignore_errors: yes
+    
+    - name: Start and enable web services
+      systemd:
+        name: "{{ item.name }}"
+        state: started
+        enabled: yes
+      loop: "{{ web_services }}"
+    
+    - name: Verify service status
+      uri:
+        url: "http://{{ ansible_default_ipv4.address }}:{{ item.port }}"
+        method: GET
+        status_code: 200
+      loop: "{{ web_services }}"
+      delegate_to: localhost
+      ignore_errors: yes
