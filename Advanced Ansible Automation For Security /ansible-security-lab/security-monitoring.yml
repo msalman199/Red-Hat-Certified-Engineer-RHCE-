@@ -1,0 +1,122 @@
+---
+- name: Security Monitoring and Auditing
+  hosts: all
+  become: yes
+  
+  tasks:
+    - name: Install audit daemon
+      yum:
+        name: audit
+        state: present
+
+    - name: Configure audit rules
+      copy:
+        content: |
+          # Monitor authentication events
+          -w /var/log/auth.log -p wa -k authentication
+          -w /var/log/secure -p wa -k authentication
+          
+          # Monitor user and group modifications
+          -w /etc/passwd -p wa -k user_modification
+          -w /etc/group -p wa -k group_modification
+          -w /etc/shadow -p wa -k password_modification
+          
+          # Monitor sudo usage
+          -w /etc/sudoers -p wa -k sudo_modification
+          -w /etc/sudoers.d/ -p wa -k sudo_modification
+          
+          # Monitor SSH configuration
+          -w /etc/ssh/sshd_config -p wa -k ssh_config
+          
+          # Monitor system calls
+          -a always,exit -F arch=b64 -S execve -k process_execution
+          -a always,exit -F arch=b32 -S execve -k process_execution
+          
+          # Monitor file access
+          -a always,exit -F arch=b64 -S open -S openat -F exit=-EACCES -k access_denied
+          -a always,exit -F arch=b64 -S open -S openat -F exit=-EPERM -k access_denied
+        dest: /etc/audit/rules.d/security.rules
+        owner: root
+        group: root
+        mode: '0640'
+      notify: restart auditd
+
+    - name: Start and enable audit daemon
+      systemd:
+        name: auditd
+        state: started
+        enabled: yes
+
+    - name: Configure fail2ban for SSH protection
+      copy:
+        content: |
+          [DEFAULT]
+          bantime = 3600
+          findtime = 600
+          maxretry = 3
+          
+          [sshd]
+          enabled = true
+          port = ssh
+          logpath = /var/log/secure
+          maxretry = 3
+          bantime = 3600
+        dest: /etc/fail2ban/jail.local
+        owner: root
+        group: root
+        mode: '0644'
+      notify: restart fail2ban
+
+    - name: Start and enable fail2ban
+      systemd:
+        name: fail2ban
+        state: started
+        enabled: yes
+
+    - name: Create security check script
+      copy:
+        content: |
+          #!/bin/bash
+          # Security monitoring script
+          
+          echo "=== Security Status Report ===" > /var/log/security-report.log
+          echo "Date: $(date)" >> /var/log/security-report.log
+          echo "" >> /var/log/security-report.log
+          
+          echo "Failed SSH attempts:" >> /var/log/security-report.log
+          grep "Failed password" /var/log/secure | tail -10 >> /var/log/security-report.log
+          echo "" >> /var/log/security-report.log
+          
+          echo "Current active users:" >> /var/log/security-report.log
+          who >> /var/log/security-report.log
+          echo "" >> /var/log/security-report.log
+          
+          echo "Sudo usage:" >> /var/log/security-report.log
+          grep "sudo:" /var/log/secure | tail -5 >> /var/log/security-report.log
+          echo "" >> /var/log/security-report.log
+          
+          echo "SELinux denials:" >> /var/log/security-report.log
+          grep "denied" /var/log/audit/audit.log | tail -5 >> /var/log/security-report.log
+        dest: /usr/local/bin/security-check.sh
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Schedule security monitoring
+      cron:
+        name: "Security monitoring"
+        minute: "0"
+        hour: "*/6"
+        job: "/usr/local/bin/security-check.sh"
+        user: root
+
+  handlers:
+    - name: restart auditd
+      systemd:
+        name: auditd
+        state: restarted
+
+    - name: restart fail2ban
+      systemd:
+        name: fail2ban
+        state: restarted
