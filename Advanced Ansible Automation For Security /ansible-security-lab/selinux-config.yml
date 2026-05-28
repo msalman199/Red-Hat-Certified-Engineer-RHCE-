@@ -1,0 +1,71 @@
+---
+- name: Configure SELinux Security Policies
+  hosts: all
+  become: yes
+  vars:
+    selinux_state: enforcing
+    selinux_policy: targeted
+    
+  tasks:
+    - name: Install SELinux management tools
+      yum:
+        name:
+          - policycoreutils
+          - policycoreutils-python-utils
+          - selinux-policy
+          - selinux-policy-targeted
+          - setroubleshoot-server
+        state: present
+
+    - name: Set SELinux to enforcing mode
+      selinux:
+        policy: "{{ selinux_policy }}"
+        state: "{{ selinux_state }}"
+      register: selinux_result
+
+    - name: Reboot if SELinux state changed
+      reboot:
+        reboot_timeout: 300
+      when: selinux_result.reboot_required
+
+    - name: Configure SELinux booleans for web services
+      seboolean:
+        name: "{{ item }}"
+        state: yes
+        persistent: yes
+      loop:
+        - httpd_can_network_connect
+        - httpd_can_network_connect_db
+        - httpd_execmem
+      when: inventory_hostname in groups['webservers']
+
+    - name: Configure SELinux booleans for database services
+      seboolean:
+        name: "{{ item }}"
+        state: yes
+        persistent: yes
+      loop:
+        - mysql_connect_any
+        - selinuxuser_mysql_connect_enabled
+      when: inventory_hostname in groups['databases']
+
+    - name: Set SELinux file contexts for web content
+      sefcontext:
+        target: '/var/www/html(/.*)?'
+        setype: httpd_exec_t
+        state: present
+      when: inventory_hostname in groups['webservers']
+
+    - name: Apply SELinux file contexts
+      command: restorecon -R /var/www/html
+      when: inventory_hostname in groups['webservers']
+      ignore_errors: yes
+
+    - name: Verify SELinux status
+      command: sestatus
+      register: selinux_status
+      changed_when: false
+
+    - name: Display SELinux status
+      debug:
+        var: selinux_status.stdout_lines
