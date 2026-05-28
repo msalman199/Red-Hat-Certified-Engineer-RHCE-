@@ -1,0 +1,44 @@
+---
+- name: Debug Module Examples
+  hosts: webservers
+  gather_facts: yes
+  vars:
+    app_name: "MyWebApp"
+    app_version: "1.2.3"
+    debug_enabled: true
+    
+  tasks:
+    - name: Debug - Display simple message
+      debug:
+        msg: "Starting deployment of {{ app_name }} version {{ app_version }}"
+        
+    - name: Debug - Display variable values
+      debug:
+        var: ansible_hostname
+        
+    - name: Debug - Display multiple variables
+      debug:
+        msg: |
+          Host Information:
+          - Hostname: {{ ansible_hostname }}
+          - IP Address: {{ ansible_default_ipv4.address }}
+          - OS Family: {{ ansible_os_family }}
+          - Architecture: {{ ansible_architecture }}
+          
+    - name: Debug - Conditional debugging
+      debug:
+        msg: "Debug mode is enabled for {{ inventory_hostname }}"
+      when: debug_enabled
+      
+    - name: Gather package facts
+      package_facts:
+        manager: auto
+        
+    - name: Debug - Display installed packages (filtered)
+      debug:
+        msg: "Package {{ item }} is installed"
+      loop:
+        - httpd
+        - openssh-server
+        - vim
+      when: item in ansible_facts.packages
