@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{ inventory_hostname }} - MyApp</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        .header { background-color: #f0f0f0; padding: 20px; border-radius: 5px; }
+        .info { margin: 20px 0; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Welcome to MyApp</h1>
+        <p>Running on {{ inventory_hostname }}</p>
+    </div>
+    
+    <div class="info">
+        <h2>System Information</h2>
+        <ul>
+            <li><strong>Hostname:</strong> {{ ansible_hostname }}</li>
+            <li><strong>IP Address:</strong> {{ ansible_default_ipv4.address }}</li>
+            <li><strong>OS:</strong> {{ ansible_distribution }} {{ ansible_distribution_version }}</li>
+            <li><strong>Architecture:</strong> {{ ansible_architecture }}</li>
+            <li><strong>Port:</strong> {{ app_port }}</li>
+        </ul>
+    </div>
+    
+    <div class="info">
+        <h2>Deployment Details</h2>
+        <p>Deployed by Ansible on {{ ansible_date_time.iso8601 }}</p>
+        <p>Managed by user: {{ web_user }}</p>
+    </div>
+</body>
+</html>
