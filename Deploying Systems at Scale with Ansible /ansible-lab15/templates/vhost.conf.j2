@@ -1,0 +1,18 @@
+<VirtualHost *:{{ web_server_port }}>
+    ServerName {{ server_name }}
+    DocumentRoot {{ document_root }}
+    
+    <Directory {{ document_root }}>
+        Options Indexes FollowSymLinks
+        AllowOverride All
+        Require all granted
+    </Directory>
+    
+    ErrorLog ${APACHE_LOG_DIR}/{{ server_name }}_error.log
+    CustomLog ${APACHE_LOG_DIR}/{{ server_name }}_access.log combined
+    
+    # Security headers
+    Header always set X-Content-Type-Options nosniff
+    Header always set X-Frame-Options DENY
+    Header always set X-XSS-Protection "1; mode=block"
+</VirtualHost>
