@@ -1,0 +1,80 @@
+---
+- name: Comprehensive System Maintenance Workflow
+  hosts: all
+  become: yes
+  serial: 1
+  vars:
+    maintenance_mode: true
+    maintenance_window_start: "{{ ansible_date_time.iso8601 }}"
+    notification_email: admin@example.com
+    
+  pre_tasks:
+    - name: Create maintenance log directory
+      file:
+        path: /var/log/maintenance
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+    
+    - name: Start maintenance logging
+      copy:
+        content: |
+          Maintenance started at: {{ maintenance_window_start }}
+          Host: {{ ansible_hostname }}
+          Maintenance tasks planned:
+          1. System health check
+          2. Package updates
+          3. Log rotation
+          4. Service management
+          5. System reboot (if required)
+        dest: /var/log/maintenance/maintenance-{{ ansible_date_time.epoch }}.log
+        owner: root
+        group: root
+        mode: '0644'
+  
+  tasks:
+    - name: Phase 1 - Pre-maintenance health check
+      include_tasks: tasks/health-check.yml
+      vars:
+        check_phase: "pre-maintenance"
+    
+    - name: Phase 2 - Update system packages
+      include_tasks: tasks/package-updates.yml
+    
+    - name: Phase 3 - Configure log rotation
+      include_tasks: tasks/log-rotation.yml
+    
+    - name: Phase 4 - Service management
+      include_tasks: tasks/service-management.yml
+    
+    - name: Phase 5 - System reboot if required
+      include_tasks: tasks/conditional-reboot.yml
+    
+    - name: Phase 6 - Post-maintenance health check
+      include_tasks: tasks/health-check.yml
+      vars:
+        check_phase: "post-maintenance"
+  
+  post_tasks:
+    - name: Generate comprehensive maintenance report
+      template:
+        src: maintenance-report.j2
+        dest: /var/log/maintenance/maintenance-report-{{ ansible_date_time.epoch }}.html
+        owner: root
+        group: root
+        mode: '0644'
+    
+    - name: Update maintenance log with completion
+      lineinfile:
+        path: /var/log/maintenance/maintenance-{{ ansible_date_time.epoch }}.log
+        line: "Maintenance completed at: {{ ansible_date_time.iso8601 }}"
+        create: yes
+    
+    - name: Display maintenance summary
+      debug:
+        msg: |
+          Maintenance completed for {{ ansible_hostname }}
+          Start time: {{ maintenance_window_start }}
+          End time: {{ ansible_date_time.iso8601 }}
+          Check /var/log/maintenance/ for detailed reports
