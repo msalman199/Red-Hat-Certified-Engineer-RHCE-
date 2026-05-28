@@ -1,0 +1,64 @@
+---
+- name: Configure Network Interfaces and Hostnames
+  hosts: all
+  become: yes
+  vars:
+    dns_servers:
+      - 8.8.8.8
+      - 8.8.4.4
+  
+  tasks:
+    - name: Set hostname for web server
+      hostname:
+        name: web-server.lab.local
+      when: inventory_hostname == 'web-server'
+      
+    - name: Set hostname for database server
+      hostname:
+        name: db-server.lab.local
+      when: inventory_hostname == 'db-server'
+    
+    - name: Configure static IP for web server
+      nmcli:
+        conn_name: "System eth0"
+        ifname: eth0
+        type: ethernet
+        ip4: 192.168.1.20/24
+        gw4: 192.168.1.1
+        dns4: "{{ dns_servers }}"
+        state: present
+      when: inventory_hostname == 'web-server'
+      notify: restart network
+    
+    - name: Configure static IP for database server
+      nmcli:
+        conn_name: "System eth0"
+        ifname: eth0
+        type: ethernet
+        ip4: 192.168.1.30/24
+        gw4: 192.168.1.1
+        dns4: "{{ dns_servers }}"
+        state: present
+      when: inventory_hostname == 'db-server'
+      notify: restart network
+    
+    - name: Add secondary IP to web server
+      nmcli:
+        conn_name: "System eth0"
+        ifname: eth0
+        type: ethernet
+        ip4: 192.168.1.21/24
+        state: present
+      when: inventory_hostname == 'web-server'
+      notify: restart network
+    
+    - name: Ensure network connection is up
+      nmcli:
+        conn_name: "System eth0"
+        state: up
+      
+  handlers:
+    - name: restart network
+      systemd:
+        name: NetworkManager
+        state: restarted
