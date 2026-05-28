@@ -1,0 +1,20 @@
+# Web server configuration
+web_server_package: "apache2"
+web_server_service: "apache2"
+web_server_port: 80
+web_server_ssl_port: 443
+
+# Application settings
+app_name: "demo-app"
+app_version: "1.0.0"
+app_port: 8080
+
+# Performance tuning
+max_connections: 1000
+worker_processes: 4
+
+# SSL configuration
+ssl_enabled: true
+ssl_cert_path: "/etc/ssl/certs"
+ssl_key_path: "/etc/ssl/private"
+EOF
