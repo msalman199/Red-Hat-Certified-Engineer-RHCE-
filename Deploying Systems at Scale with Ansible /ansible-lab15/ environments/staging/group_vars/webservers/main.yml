@@ -1,0 +1,22 @@
+---
+# Staging Environment Variables
+environment_name: "Staging"
+debug_mode: false
+log_level: "info"
+backup_enabled: true
+monitoring_enabled: true
+
+# Performance settings for staging
+worker_processes: 2
+worker_connections: 100
+keepalive_timeout: 60
+
+# Security settings (moderate for staging)
+ssl_enabled: false
+security_headers: true
+
+# Application settings
+app_version: "stable"
+database_pool_size: 10
+cache_enabled: true
+cache_ttl: 300
