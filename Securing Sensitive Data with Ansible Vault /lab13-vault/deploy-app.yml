@@ -1,0 +1,42 @@
+---
+- name: Deploy Application with Environment-Specific Secrets
+  hosts: all
+  vars_files:
+    - secrets.yml
+    - "{{ environment }}-secrets.yml"
+  vars:
+    app_name: "MySecureApp"
+    app_version: "1.0.0"
+  tasks:
+    - name: Create application directory
+      file:
+        path: "/opt/{{ app_name }}"
+        state: directory
+        mode: '0755'
+    
+    - name: Deploy application configuration
+      template:
+        src: app-config.j2
+        dest: "/opt/{{ app_name }}/config.yml"
+        mode: '0600'
+      
+    - name: Create environment-specific database config
+      copy:
+        content: |
+          environment: {{ environment }}
+          database:
+            host: "{{ prod_db_host | default(db_host) }}"
+            username: "{{ prod_db_username | default(db_username) }}"
+            password: "{{ prod_db_password | default(db_password) }}"
+          api:
+            endpoint: "{{ prod_api_endpoint | default('https://api.dev.company.com') }}"
+            token: "{{ prod_api_token | default(api_key) }}"
+        dest: "/opt/{{ app_name }}/env-config.yml"
+        mode: '0600'
+    
+    - name: Display deployment summary
+      debug:
+        msg: |
+          Application {{ app_name }} v{{ app_version }} deployed successfully
+          Environment: {{ environment }}
+          Config location: /opt/{{ app_name }}/
