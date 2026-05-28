@@ -1,0 +1,25 @@
+System Reboot Report
+===================
+Host: {{ ansible_hostname }}
+Reboot Date: {{ ansible_date_time.iso8601 }}
+Boot Time: {{ boot_time.stdout }}
+
+Reboot Verification:
+{{ reboot_verification.stdout | default('Verification not available') }}
+
+Network Connectivity:
+Status: {{ 'OK' if network_test.status == 200 else 'FAILED' }}
+
+Critical Services Status:
+{% for result in critical_services_status.results %}
+{{ result.item }}: {{ 'Running' if result.status.ActiveState == 'active' else 'Not Running' }}
+{% endfor %}
+
+Service Comparison:
+{{ service_comparison.stdout }}
+
+System Information Post-Reboot:
+- Uptime: {{ ansible_uptime_seconds | int // 3600 }} hours
+- Load Average: {{ ansible_loadavg.1m }}
+- Memory Usage: {{ (ansible_memory_mb.real.used / ansible_memory_mb.real.total * 100) | round(2) }}%
+- Disk Usage: {{ ansible_mounts[0].size_available / ansible_mounts[0].size_total * 100 | round(2) }}% available
