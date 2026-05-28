@@ -1,0 +1,15 @@
+/var/log/apache2/{{ server_name }}_*.log {
+    daily
+    missingok
+    rotate {% if environment_name == "Production" %}30{% else %}7{% endif %}
+    compress
+    delaycompress
+    notifempty
+    create 640 root adm
+    sharedscripts
+    postrotate
+        if /bin/systemctl status apache2 > /dev/null ; then \
+            /bin/systemctl reload apache2 > /dev/null; \
+        fi;
+    endscript
+}
