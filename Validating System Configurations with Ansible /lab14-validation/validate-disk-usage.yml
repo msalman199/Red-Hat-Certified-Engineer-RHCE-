@@ -1,0 +1,109 @@
+---
+- name: Validate System Disk Usage
+  hosts: all
+  gather_facts: yes
+  vars:
+    # Define thresholds for validation
+    disk_usage_warning_threshold: 80
+    disk_usage_critical_threshold: 90
+    minimum_free_space_gb: 2
+    
+  tasks:
+    - name: Initialize validation results
+      set_fact:
+        validation_results: []
+        failed_validations: []
+        
+    - name: Validate root filesystem disk usage
+      block:
+        - name: Calculate root filesystem usage percentage
+          set_fact:
+            root_mount_info: "{{ ansible_mounts | selectattr('mount', 'equalto', '/') | first }}"
+            
+        - name: Calculate usage percentage
+          set_fact:
+            root_usage_percent: "{{ ((root_mount_info.size_total - root_mount_info.size_available) / root_mount_info.size_total * 100) | round(2) }}"
+            root_free_gb: "{{ (root_mount_info.size_available / 1024 / 1024 / 1024) | round(2) }}"
+            
+        - name: Add disk usage validation result
+          set_fact:
+            validation_results: "{{ validation_results + [validation_item] }}"
+          vars:
+            validation_item:
+              host: "{{ ansible_hostname }}"
+              check: "Root Disk Usage"
+              status: "{{ 'CRITICAL' if (root_usage_percent | float) > disk_usage_critical_threshold else ('WARNING' if (root_usage_percent | float) > disk_usage_warning_threshold else 'OK') }}"
+              value: "{{ root_usage_percent }}%"
+              threshold: "Warning: {{ disk_usage_warning_threshold }}%, Critical: {{ disk_usage_critical_threshold }}%"
+              free_space: "{{ root_free_gb }} GB"
+              
+        - name: Check if disk usage exceeds critical threshold
+          fail:
+            msg: |
+              CRITICAL: Disk usage on {{ ansible_hostname }} is {{ root_usage_percent }}%
+              This exceeds the critical threshold of {{ disk_usage_critical_threshold }}%
+              Free space remaining: {{ root_free_gb }} GB
+          when: (root_usage_percent | float) > disk_usage_critical_threshold
+          
+        - name: Warn about high disk usage
+          debug:
+            msg: |
+              WARNING: Disk usage on {{ ansible_hostname }} is {{ root_usage_percent }}%
+              This exceeds the warning threshold of {{ disk_usage_warning_threshold }}%
+              Free space remaining: {{ root_free_gb }} GB
+          when: 
+            - (root_usage_percent | float) > disk_usage_warning_threshold
+            - (root_usage_percent | float) <= disk_usage_critical_threshold
+            
+        - name: Validate minimum free space requirement
+          fail:
+            msg: |
+              CRITICAL: Free space on {{ ansible_hostname }} is {{ root_free_gb }} GB
+              This is below the minimum requirement of {{ minimum_free_space_gb }} GB
+          when: (root_free_gb | float) < minimum_free_space_gb
+          
+      rescue:
+        - name: Record failed validation
+          set_fact:
+            failed_validations: "{{ failed_validations + [failure_item] }}"
+          vars:
+            failure_item:
+              host: "{{ ansible_hostname }}"
+              error: "{{ ansible_failed_result.msg }}"
+              timestamp: "{{ ansible_date_time.iso8601 }}"
+              
+        - name: Continue with other validations despite failure
+          debug:
+            msg: "Validation failed for {{ ansible_hostname }}, but continuing with other checks"
+            
+    - name: Validate additional mount points
+      block:
+        - name: Check other significant mount points
+          set_fact:
+            mount_validation: "{{ mount_validation | default([]) + [mount_item] }}"
+          vars:
+            mount_usage_percent: "{{ ((item.size_total - item.size_available) / item.size_total * 100) | round(2) }}"
+            mount_item:
+              mount_point: "{{ item.mount }}"
+              usage_percent: "{{ mount_usage_percent }}"
+              free_gb: "{{ (item.size_available / 1024 / 1024 / 1024) | round(2) }}"
+              status: "{{ 'CRITICAL' if (mount_usage_percent | float) > disk_usage_critical_threshold else ('WARNING' if (mount_usage_percent | float) > disk_usage_warning_threshold else 'OK') }}"
+          loop: "{{ ansible_mounts }}"
+          when: 
+            - item.mount != "/"
+            - item.fstype not in ['tmpfs', 'devtmpfs', 'proc', 'sysfs']
+            - item.size_total > 1073741824  # Only check mounts larger than 1GB
+            
+        - name: Display additional mount point validations
+          debug:
+            msg: |
+              Mount Point: {{ item.mount_point }}
+              Usage: {{ item.usage_percent }}%
+              Free Space: {{ item.free_gb }} GB
+              Status: {{ item.status }}
+          loop: "{{ mount_validation | default([]) }}"
+          
+      rescue:
+        - name: Handle mount point validation errors
+          debug:
+            msg: "Error validating additional mount points on {{ ansible_hostname }}"
