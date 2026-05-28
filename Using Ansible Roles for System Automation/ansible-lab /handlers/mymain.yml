@@ -1,0 +1,17 @@
+---
+# Handlers for service configuration role
+- name: restart service
+  service:
+    name: "{{ item.name }}"
+    state: restarted
+  loop: "{{ services_to_manage }}"
+  when: services_to_manage is defined
+  become: true
+
+- name: reload service
+  service:
+    name: "{{ item.name }}"
+    state: reloaded
+  loop: "{{ services_to_manage }}"
+  when: services_to_manage is defined
+  become: true
