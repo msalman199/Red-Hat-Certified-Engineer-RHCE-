@@ -1,0 +1,7 @@
+---
+# Default variables for service configuration role
+services_to_manage: []
+default_service_state: started
+default_service_enabled: true
+service_config_files: []
+backup_configs: true
