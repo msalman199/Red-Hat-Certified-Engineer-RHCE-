@@ -1,0 +1,112 @@
+---
+- name: Advanced Configuration Assertions
+  hosts: all
+  gather_facts: yes
+  vars:
+    security_requirements:
+      ssh_port: 22
+      max_auth_tries: 3
+      permit_root_login: false
+    performance_thresholds:
+      max_load_average: 2.0
+      min_swap_mb: 512
+      
+  tasks:
+    - name: Advanced Security Configuration Validation
+      block:
+        - name: Check SSH configuration file exists
+          stat:
+            path: /etc/ssh/sshd_config
+          register: ssh_config_stat
+          
+        - name: Assert SSH config file exists and is readable
+          assert:
+            that:
+              - ssh_config_stat.stat.exists
+              - ssh_config_stat.stat.isreg
+              - ssh_config_stat.stat.readable
+            fail_msg: "SSH configuration file is missing or not readable on {{ ansible_hostname }}"
+            success_msg: "SSH configuration file is accessible on {{ ansible_hostname }}"
+            
+        - name: Read SSH configuration
+          slurp:
+            src: /etc/ssh/sshd_config
+          register: ssh_config_content
+          
+        - name: Parse SSH configuration
+          set_fact:
+            ssh_config_lines: "{{ (ssh_config_content.content | b64decode).split('\n') }}"
+            
+        - name: Validate SSH security settings
+          assert:
+            that:
+              - ssh_config_lines | select('match', '^PermitRootLogin\\s+no') | list | length > 0 or
+                ssh_config_lines | select('match', '^#PermitRootLogin\\s+no') | list | length == 0
+            fail_msg: "Root login should be disabled in SSH configuration on {{ ansible_hostname }}"
+            success_msg: "SSH root login is properly configured on {{ ansible_hostname }}"
+            
+    - name: System Performance Assertions
+      block:
+        - name: Get current load average
+          shell: uptime | awk -F'load average:' '{print $2}' | awk -F',' '{print $1}' | tr -d ' '
+          register: current_load
+          changed_when: false
+          
+        - name: Assert load average is within acceptable range
+          assert:
+            that:
+              - (current_load.stdout | float) <= performance_thresholds.max_load_average
+            fail_msg: |
+              High load average detected on {{ ansible_hostname }}:
+              Current: {{ current_load.stdout }}
+              Threshold: {{ performance_thresholds.max_load_average }}
+            success_msg: "Load average is within acceptable range on {{ ansible_hostname }}"
+            
+        - name: Validate swap configuration
+          assert:
+            that:
+              - ansible_swaptotal_mb >= performance_thresholds.min_swap_mb
+            fail_msg: |
+              Insufficient swap space on {{ ansible_hostname }}:
+              Current: {{ ansible_swaptotal_mb }} MB
+              Required: {{ performance_thresholds.min_swap_mb }} MB
+            success_msg: "Swap space is adequately configured on {{ ansible_hostname }}"
+          when: ansible_swaptotal_mb is defined
+          
+    - name: File System Consistency Validation
+      block:
+        - name: Validate critical directories exist
+          stat:
+            path: "{{ item }}"
+          register: critical_dirs
+          loop:
+            - /etc
+            - /var/log
+            - /tmp
+            - /home
+            
+        - name: Assert critical directories are present
+          assert:
+            that:
+              - item.stat.exists
+              - item.stat.isdir
+            fail_msg: "Critical directory {{ item.item }} is missing on {{ ansible_hostname }}"
+            success_msg: "Critical directory {{ item.item }} exists on {{ ansible_hostname }}"
+          loop: "{{ critical_dirs.results }}"
+          
+        - name: Validate log directory permissions
+          stat:
+            path: /var/log
+          register: log_dir_stat
+          
+        - name: Assert log directory has correct permissions
+          assert:
+            that:
+              - log_dir_stat.stat.mode == '0755'
+              - log_dir_stat.stat.uid == 0
+              - log_dir_stat.stat.gid == 0
+            fail_msg: |
+              Incorrect permissions on /var/log directory on {{ ansible_hostname }}:
+              Mode: {{ log_dir_stat.stat.mode }}
+              Owner: {{ log_dir_stat.stat.uid }}:{{ log_dir_stat.stat.gid }}
+            success_msg: "Log directory permissions are correct on {{ ansible_hostname }}"
