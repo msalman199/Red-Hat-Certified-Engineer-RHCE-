@@ -1,0 +1,59 @@
+---
+- name: Advanced Firewall Configuration
+  hosts: all
+  become: yes
+  
+  tasks:
+    - name: Create DMZ zone for web servers
+      firewalld:
+        zone: dmz
+        state: present
+        permanent: yes
+      when: inventory_hostname in groups['webservers']
+
+    - name: Configure DMZ zone interface
+      firewalld:
+        zone: dmz
+        interface: eth0
+        permanent: yes
+        immediate: yes
+        state: enabled
+      when: inventory_hostname in groups['webservers']
+
+    - name: Allow web services in DMZ
+      firewalld:
+        service: "{{ item }}"
+        zone: dmz
+        permanent: yes
+        immediate: yes
+        state: enabled
+      loop:
+        - http
+        - https
+      when: inventory_hostname in groups['webservers']
+
+    - name: Configure port forwarding for load balancer
+      firewalld:
+        rich_rule: 'rule family=ipv4 forward-port port=80 protocol=tcp to-port=8080'
+        zone: public
+        permanent: yes
+        immediate: yes
+        state: enabled
+      when: inventory_hostname in groups['webservers']
+
+    - name: Log dropped packets
+      firewalld:
+        rich_rule: 'rule drop log prefix="FIREWALL-DROP: "'
+        zone: public
+        permanent: yes
+        immediate: yes
+        state: enabled
+
+    - name: Verify firewall status
+      command: firewall-cmd --list-all-zones
+      register: firewall_status
+      changed_when: false
+
+    - name: Display firewall configuration
+      debug:
+        var: firewall_status.stdout_lines
