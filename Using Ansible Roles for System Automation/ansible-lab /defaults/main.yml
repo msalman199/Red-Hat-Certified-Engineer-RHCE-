@@ -1,0 +1,10 @@
+---
+# Default variables for user management role
+users_to_create: []
+users_to_remove: []
+default_shell: /bin/bash
+default_groups: []
+create_home: true
+password_policy:
+  min_length: 8
+  require_special_chars: false
