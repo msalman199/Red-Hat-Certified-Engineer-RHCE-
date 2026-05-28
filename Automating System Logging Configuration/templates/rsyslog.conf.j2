@@ -1,0 +1,46 @@
+# rsyslog configuration file
+# Managed by Ansible - Do not edit manually
+
+# Modules
+module(load="imuxsock")    # provides support for local system logging
+module(load="imjournal")   # provides access to the systemd journal
+{% if inventory_hostname in groups['logging_servers'] %}
+module(load="imudp")       # provides UDP syslog reception
+module(load="imtcp")       # provides TCP syslog reception
+{% endif %}
+
+# Global directives
+global(workDirectory="/var/lib/rsyslog")
+
+# Include all config files in /etc/rsyslog.d/
+include(file="/etc/rsyslog.d/*.conf" mode="optional")
+
+# Rules section
+*.info;mail.none;authpriv.none;cron.none    /var/log/messages
+authpriv.*                                  /var/log/secure
+mail.*                                      -/var/log/maillog
+cron.*                                      /var/log/cron
+*.emerg                                     :omusrmsg:*
+uucp,news.crit                             /var/log/spooler
+local7.*                                   /var/log/boot.log
+
+{% if inventory_hostname in groups['logging_servers'] %}
+# Server configuration - receive logs from other systems
+input(type="imudp" port="{{ rsyslog_port }}")
+input(type="imtcp" port="{{ rsyslog_port }}")
+
+# Template for remote logs
+template(name="RemoteLogFormat" type="string"
+         string="/var/log/remote/%HOSTNAME%/%PROGRAMNAME%.log")
+
+# Store remote logs in separate files
+if $fromhost-ip != '127.0.0.1' then {
+    action(type="omfile" dynaFile="RemoteLogFormat")
+    stop
+}
+{% endif %}
+
+{% if inventory_hostname in groups['log_clients'] %}
+# Client configuration - forward logs to central server
+*.* @@{{ hostvars[groups['logging_servers'][0]]['ansible_host'] }}:{{ rsyslog_port }}
+{% endif %}
