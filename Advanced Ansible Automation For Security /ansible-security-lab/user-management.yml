@@ -1,0 +1,113 @@
+---
+- name: Secure User Account Management
+  hosts: all
+  become: yes
+  vars:
+    admin_users:
+      - name: secadmin
+        groups: wheel
+        shell: /bin/bash
+        password: "$6$rounds=656000$salt$hashed_password_here"
+      - name: webadmin
+        groups: apache
+        shell: /bin/bash
+        password: "$6$rounds=656000$salt$hashed_password_here"
+    
+    service_users:
+      - name: webapp
+        system: yes
+        shell: /sbin/nologin
+        home: /var/lib/webapp
+      - name: dbuser
+        system: yes
+        shell: /sbin/nologin
+        home: /var/lib/mysql
+
+  tasks:
+    - name: Create admin users
+      user:
+        name: "{{ item.name }}"
+        groups: "{{ item.groups }}"
+        shell: "{{ item.shell }}"
+        password: "{{ item.password }}"
+        state: present
+        create_home: yes
+      loop: "{{ admin_users }}"
+
+    - name: Create service users
+      user:
+        name: "{{ item.name }}"
+        system: "{{ item.system | default(false) }}"
+        shell: "{{ item.shell }}"
+        home: "{{ item.home }}"
+        state: present
+        create_home: yes
+      loop: "{{ service_users }}"
+
+    - name: Configure SSH keys for admin users
+      authorized_key:
+        user: "{{ item.name }}"
+        key: "{{ lookup('file', '~/.ssh/id_rsa.pub') }}"
+        state: present
+      loop: "{{ admin_users }}"
+
+    - name: Configure sudo access for admin users
+      lineinfile:
+        path: /etc/sudoers.d/admin-users
+        line: "{{ item.name }} ALL=(ALL) NOPASSWD: ALL"
+        create: yes
+        validate: 'visudo -cf %s'
+      loop: "{{ admin_users }}"
+      when: "'wheel' in item.groups"
+
+    - name: Set password policies for users
+      user:
+        name: "{{ item.name }}"
+        password_expire_max: 90
+        password_expire_min: 7
+        password_expire_warn: 7
+      loop: "{{ admin_users }}"
+
+    - name: Lock unused system accounts
+      user:
+        name: "{{ item }}"
+        password_lock: yes
+      loop:
+        - games
+        - ftp
+        - nobody
+      ignore_errors: yes
+
+    - name: Remove unnecessary users
+      user:
+        name: "{{ item }}"
+        state: absent
+        remove: yes
+      loop:
+        - guest
+        - test
+      ignore_errors: yes
+
+    - name: Configure login banner
+      copy:
+        content: |
+          **************************************************************************
+          *                                                                        *
+          *  This system is for authorized users only. All activity is monitored  *
+          *  and logged. Unauthorized access is prohibited and will be prosecuted *
+          *  to the full extent of the law.                                       *
+          *                                                                        *
+          **************************************************************************
+        dest: /etc/issue
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Configure SSH banner
+      copy:
+        src: /etc/issue
+        dest: /etc/issue.net
+        remote_src: yes
+        owner: root
+        group: root
+        mode: '0644'
