@@ -1,0 +1,18 @@
+---
+# Web server defaults
+web_packages:
+  - httpd
+  - firewalld
+
+web_service: httpd
+web_user: apache
+web_group: apache
+web_root: /var/www/html
+web_config_path: /etc/httpd/conf/httpd.conf
+web_config_template: httpd.conf.j2
+
+# Performance settings
+max_clients: "{{ ansible_processor_vcpus * 25 }}"
+server_limit: "{{ ansible_processor_vcpus * 2 }}"
+thread_limit: 25
+threads_per_child: 25
