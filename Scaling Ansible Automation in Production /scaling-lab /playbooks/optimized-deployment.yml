@@ -1,0 +1,102 @@
+---
+- name: High-Performance Web Server Deployment
+  hosts: webservers
+  gather_facts: yes
+  become: yes
+  strategy: free
+  serial: "25%"
+  max_fail_percentage: 10
+  
+  vars:
+    # Performance variables
+    ansible_ssh_pipelining: true
+    ansible_ssh_extra_args: '-o ControlMaster=auto -o ControlPersist=60s'
+    
+    # Deployment settings
+    deployment_timeout: 300
+    batch_delay: 2
+    
+  environment:
+    # Optimize package manager
+    DEBIAN_FRONTEND: noninteractive
+  
+  pre_tasks:
+    - name: Set deployment start time
+      set_fact:
+        deployment_start: "{{ ansible_date_time.epoch }}"
+      run_once: true
+      delegate_to: localhost
+    
+    - name: Check system resources
+      setup:
+        filter: 
+          - 'ansible_memtotal_mb'
+          - 'ansible_processor_vcpus'
+          - 'ansible_default_ipv4'
+      tags: ['facts']
+    
+    - name: Validate minimum system requirements
+      assert:
+        that:
+          - ansible_memtotal_mb >= 512
+          - ansible_processor_vcpus >= 1
+        fail_msg: "System does not meet minimum requirements"
+        success_msg: "System requirements validated"
+      tags: ['validation']
+  
+  tasks:
+    - name: Update package cache (optimized)
+      package:
+        update_cache: yes
+        cache_valid_time: 3600
+      become: yes
+      when: ansible_os_family == "Debian"
+      tags: ['packages']
+    
+    - name: Install packages in batch
+      package:
+        name: "{{ web_packages }}"
+        state: present
+      become: yes
+      async: 300
+      poll: 0
+      register: package_install
+      tags: ['packages']
+    
+    - name: Wait for package installation
+      async_status:
+        jid: "{{ package_install.ansible_job_id }}"
+      register: package_result
+      until: package_result.finished
+      retries: 30
+      delay: 10
+      tags: ['packages']
+    
+    - name: Deploy web server role
+      include_role:
+        name: webserver
+      tags: ['webserver']
+  
+  post_tasks:
+    - name: Calculate deployment time
+      set_fact:
+        deployment_duration: "{{ ansible_date_time.epoch | int - deployment_start | int }}"
+    
+    - name: Performance health check
+      uri:
+        url: "http://{{ ansible_default_ipv4.address }}:{{ http_port | default(80) }}"
+        method: GET
+        status_code: 200
+        timeout: 10
+      register: perf_health_check
+      retries: 3
+      delay: 2
+      tags: ['health_check']
+    
+    - name: Log deployment metrics
+      lineinfile:
+        path: /tmp/deployment_metrics.log
+        line: "{{ ansible_date_time.iso8601 }},{{ inventory_hostname }},{{ deployment_duration }},{{ perf_health_check.elapsed }}"
+        create: yes
+      delegate_to: localhost
+      tags: ['metrics']
