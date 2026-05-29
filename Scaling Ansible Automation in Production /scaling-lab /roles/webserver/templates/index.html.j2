@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{ region_name | title }} Web Server</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        .header { background-color: #f0f0f0; padding: 20px; border-radius: 5px; }
+        .info { margin: 20px 0; }
+        .region { color: #0066cc; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Production Web Server</h1>
+        <p class="region">Region: {{ region_name | upper }}</p>
+    </div>
+    
+    <div class="info">
+        <h2>Server Information</h2>
+        <ul>
+            <li><strong>Hostname:</strong> {{ ansible_hostname }}</li>
+            <li><strong>Server ID:</strong> {{ server_id }}</li>
+            <li><strong>IP Address:</strong> {{ ansible_default_ipv4.address }}</li>
+            <li><strong>Region:</strong> {{ region_name }}</li>
+            <li><strong>Datacenter:</strong> {{ datacenter }}</li>
+            <li><strong>CPU Cores:</strong> {{ ansible_processor_vcpus }}</li>
+            <li><strong>Memory:</strong> {{ ansible_memtotal_mb }}MB</li>
+            <li><strong>Deployment Time:</strong> {{ ansible_date_time.iso8601 }}</li>
+        </ul>
+    </div>
+    
+    <div class="info">
+        <h2>Performance Configuration</h2>
+        <ul>
+            <li><strong>Max Clients:</strong> {{ max_clients }}</li>
+            <li><strong>Server Limit:</strong> {{ server_limit }}</li>
+            <li><strong>HTTP Port:</strong> {{ http_port | default(80) }}</li>
+        </ul>
+    </div>
+</body>
+</html>
