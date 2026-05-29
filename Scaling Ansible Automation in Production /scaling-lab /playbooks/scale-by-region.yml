@@ -1,0 +1,41 @@
+---
+- name: Scale Web Servers by Region
+  hosts: localhost
+  gather_facts: no
+  vars:
+    target_regions: ['us_east', 'us_west', 'europe']
+    parallel_regions: 2
+  
+  tasks:
+    - name: Deploy to regions in parallel
+      include_tasks: deploy-region.yml
+      vars:
+        region: "{{ item }}"
+      loop: "{{ target_regions }}"
+      when: region in groups
+      throttle: "{{ parallel_regions }}"
+
+- name: Deploy Web Servers to Specific Region
+  hosts: "{{ region }}"
+  gather_facts: yes
+  become: yes
+  strategy: free
+  serial: "50%"
+  
+  roles:
+    - role: webserver
+  
+  post_tasks:
+    - name: Verify regional deployment
+      uri:
+        url: "http://{{ ansible_default_ipv4.address }}:{{ http_port | default(80) }}"
+        method: GET
+        status_code: 200
+      register: regional_health_check
+      retries: 3
+      delay: 5
+    
+    - name: Report regional deployment status
+      debug:
+        msg: "Region {{ region_name }} deployment completed successfully"
+      when: regional_health_check is succeeded
