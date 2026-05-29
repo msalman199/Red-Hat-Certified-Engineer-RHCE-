@@ -1,0 +1,73 @@
+ServerRoot "/etc/httpd"
+Listen {{ http_port | default(80) }}
+
+Include conf.modules.d/*.conf
+
+User {{ web_user }}
+Group {{ web_group }}
+
+ServerAdmin admin@{{ ansible_fqdn }}
+ServerName {{ ansible_fqdn }}:{{ http_port | default(80) }}
+
+<Directory />
+    AllowOverride none
+    Require all denied
+</Directory>
+
+DocumentRoot "{{ web_root }}"
+
+<Directory "{{ web_root }}">
+    Options Indexes FollowSymLinks
+    AllowOverride None
+    Require all granted
+</Directory>
+
+<IfModule dir_module>
+    DirectoryIndex index.html
+</IfModule>
+
+<Files ".ht*">
+    Require all denied
+</Files>
+
+ErrorLog "logs/error_log"
+LogLevel warn
+
+<IfModule log_config_module>
+    LogFormat "%h %l %u %t \"%r\" %>s %b \"%{Referer}i\" \"%{User-Agent}i\"" combined
+    LogFormat "%h %l %u %t \"%r\" %>s %b" common
+    CustomLog "logs/access_log" combined
+</IfModule>
+
+<IfModule mime_module>
+    TypesConfig /etc/mime.types
+    AddType application/x-compress .Z
+    AddType application/x-gzip .gz .tgz
+    AddType text/html .shtml
+    AddOutputFilter INCLUDES .shtml
+</IfModule>
+
+# Performance optimizations
+<IfModule mpm_prefork_module>
+    StartServers             8
+    MinSpareServers          5
+    MaxSpareServers         20
+    ServerLimit           {{ server_limit }}
+    MaxRequestWorkers     {{ max_clients }}
+    MaxConnectionsPerChild   0
+</IfModule>
+
+# Enable compression
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/plain
+    AddOutputFilterByType DEFLATE text/html
+    AddOutputFilterByType DEFLATE text/xml
+    AddOutputFilterByType DEFLATE text/css
+    AddOutputFilterByType DEFLATE application/xml
+    AddOutputFilterByType DEFLATE application/xhtml+xml
+    AddOutputFilterByType DEFLATE application/rss+xml
+    AddOutputFilterByType DEFLATE application/javascript
+    AddOutputFilterByType DEFLATE application/x-javascript
+</IfModule>
+
+Include conf.d/*.conf
