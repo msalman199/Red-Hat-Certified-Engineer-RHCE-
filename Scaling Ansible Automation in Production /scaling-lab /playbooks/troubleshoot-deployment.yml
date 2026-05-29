@@ -1,0 +1,107 @@
+---
+- name: Troubleshoot Large-Scale Deployment Issues
+  hosts: webservers
+  gather_facts: yes
+  become: yes
+  ignore_errors: yes
+  
+  vars:
+    troubleshoot_mode: true
+    log_level: debug
+  
+  tasks:
+    - name: Check connectivity to all hosts
+      ping:
+      register: connectivity_test
+      tags: ['connectivity']
+    
+    - name: Test SSH connection parameters
+      shell: |
+        echo "SSH Connection Test Results:"
+        echo "User: $(whoami)"
+        echo "Home: $HOME"
+        echo "SSH Agent: $SSH_AUTH_SOCK"
+        echo "Current directory: $(pwd)"
+        echo "Sudo access: $(sudo -n true 2>/dev/null && echo 'Yes' || echo 'No')"
+      register: ssh_test
+      changed_when: false
+      tags: ['connectivity']
+    
+    - name: Check system resources
+      shell: |
+        echo "=== System Resources ==="
+        echo "Memory: $(free -h | grep Mem)"
+        echo "Disk: $(df -h /)"
+        echo "CPU: $(nproc) cores"
+        echo "Load: $(uptime | awk -F'load average:' '{print $2}')"
+        echo "=== Network ==="
+        echo "Hostname: $(hostname -f)"
+        echo "IP: $(hostname -I)"
+        echo "=== Services ==="
+        systemctl status httpd --no-pager -l || echo "httpd not running"
+      register: resource_check
+      changed_when: false
+      tags: ['resources']
+    
+    - name: Check for common issues
+      shell: |
+        echo "=== Common Issues Check ==="
+        
+        # Check SELinux
+        if command -v getenforce >/dev/null 2>&1; then
+          echo "SELinux: $(getenforce)"
+        fi
+        
+        # Check firewall
+        if systemctl is-active firewalld >/dev/null 2>&1; then
+          echo "Firewall: Active"
+          firewall-cmd --list-services 2>/dev/null || echo "Cannot list firewall services"
+        else
+          echo "Firewall: Inactive"
+        fi
+        
+        # Check package manager locks
+        if [ -f /var/lib/dpkg/lock ]; then
+          echo "APT lock: $(ls -la /var/lib/dpkg/lock* 2>/dev/null || echo 'No locks')"
+        fi
+        
+        if [ -f /var/lib/rpm/.rpm.lock ]; then
+          echo "RPM lock: Present"
+        else
+          echo "RPM lock: None"
+        fi
+        
+        # Check disk space
+        echo "Disk usage:"
+        df -h | grep -E '(Filesystem|/dev/)'
+        
+        # Check for zombie processes
+        echo "Zombie processes: $(ps aux | awk '$8 ~ /^Z/ { count++ } END { print count+0 }')"
+      register: common_issues
+      changed_when: false
+      tags: ['issues']
+    
+    - name: Generate troubleshooting report
+      copy:
+        content: |
+          ANSIBLE TROUBLESHOOTING REPORT
+          ==============================
+          Host: {{ inventory_hostname }}
+          Date: {{ ansible_date_time.iso8601 }}
+          
+          CONNECTIVITY TEST:
+          {{ connectivity_test | to_nice_json }}
+          
+          SSH CONNECTION:
+          {{ ssh_test.stdout }}
+          
+          SYSTEM RESOURCES:
+          {{ resource_check.stdout }}
+          
+          COMMON ISSUES:
+          {{ common_issues.stdout }}
+          
+          ANSIBLE FACTS SUMMARY:
+          - OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
+          - Kernel: {{ ansible_kernel }}
+          - Architecture:
