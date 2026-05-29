@@ -1,0 +1,58 @@
+---
+- name: Install web server packages
+  package:
+    name: "{{ web_packages }}"
+    state: present
+  become: yes
+  tags: ['packages']
+
+- name: Create web content directory
+  file:
+    path: "{{ web_root }}"
+    state: directory
+    owner: "{{ web_user }}"
+    group: "{{ web_group }}"
+    mode: '0755'
+  become: yes
+  tags: ['filesystem']
+
+- name: Deploy web application template
+  template:
+    src: index.html.j2
+    dest: "{{ web_root }}/index.html"
+    owner: "{{ web_user }}"
+    group: "{{ web_group }}"
+    mode: '0644'
+  become: yes
+  notify: restart webserver
+  tags: ['content']
+
+- name: Configure web server
+  template:
+    src: "{{ web_config_template }}"
+    dest: "{{ web_config_path }}"
+    owner: root
+    group: root
+    mode: '0644'
+    backup: yes
+  become: yes
+  notify: restart webserver
+  tags: ['config']
+
+- name: Start and enable web server
+  service:
+    name: "{{ web_service }}"
+    state: started
+    enabled: yes
+  become: yes
+  tags: ['service']
+
+- name: Configure firewall for web traffic
+  firewalld:
+    service: http
+    permanent: yes
+    state: enabled
+    immediate: yes
+  become: yes
+  ignore_errors: yes
+  tags: ['firewall']
