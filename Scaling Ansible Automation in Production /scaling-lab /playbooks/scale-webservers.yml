@@ -1,0 +1,51 @@
+---
+- name: Scale Web Servers Across Multiple Regions
+  hosts: webservers
+  gather_facts: yes
+  become: yes
+  strategy: free
+  serial: "30%"
+  
+  vars:
+    http_port: 80
+    deployment_batch_size: 5
+    health_check_retries: 3
+    health_check_delay: 10
+  
+  pre_tasks:
+    - name: Display deployment information
+      debug:
+        msg: |
+          Starting deployment to {{ inventory_hostname }}
+          Region: {{ region_name }}
+          Batch size: {{ deployment_batch_size }}
+      tags: ['info']
+    
+    - name: Ensure system is ready for deployment
+      wait_for_connection:
+        timeout: 30
+      tags: ['connectivity']
+  
+  roles:
+    - role: webserver
+      tags: ['webserver']
+  
+  post_tasks:
+    - name: Perform health check
+      uri:
+        url: "http://{{ ansible_default_ipv4.address }}:{{ http_port }}"
+        method: GET
+        status_code: 200
+      register: health_check
+      retries: "{{ health_check_retries }}"
+      delay: "{{ health_check_delay }}"
+      tags: ['health_check']
+    
+    - name: Display deployment success
+      debug:
+        msg: |
+          Successfully deployed to {{ inventory_hostname }}
+          Health check status: {{ health_check.status }}
+          Response time: {{ health_check.elapsed }}s
+      when: health_check is succeeded
+      tags: ['info']
