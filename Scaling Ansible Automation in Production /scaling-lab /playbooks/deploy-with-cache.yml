@@ -1,0 +1,50 @@
+---
+- name: Deploy Using Cached Facts
+  hosts: webservers
+  gather_facts: no
+  become: yes
+  
+  vars:
+    force_fact_gathering: false
+  
+  pre_tasks:
+    - name: Load cached facts
+      setup:
+        gather_subset: 'min'
+      when: force_fact_gathering | bool
+      tags: ['facts']
+    
+    - name: Use cached facts for deployment decisions
+      set_fact:
+        skip_package_install: "{{ ansible_local.webserver.web_server_installed | default(false) | bool }}"
+        needs_service_restart: "{{ not (ansible_local.webserver.web_server_running | default(false) | bool) }}"
+      tags: ['facts']
+  
+  tasks:
+    - name: Install web server (conditional)
+      package:
+        name: httpd
+        state: present
+      when: not skip_package_install
+      tags: ['packages']
+    
+    - name: Deploy web content
+      include_role:
+        name: webserver
+        tasks_from: main
+      tags: ['content']
+    
+    - name: Start web server (conditional)
+      service:
+        name: httpd
+        state: started
+        enabled: yes
+      when: needs_service_restart
+      tags: ['service']
+  
+  post_tasks:
+    - name: Update custom facts
+      shell: /etc/ansible/facts.d/webserver.fact
+      register: updated_facts
+      changed_when: false
+      tags: ['facts_update']
