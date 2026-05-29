@@ -1,0 +1,60 @@
+---
+- name: Cache System Facts for Large Deployments
+  hosts: all
+  gather_facts: yes
+  
+  vars:
+    custom_fact_modules:
+      - setup
+      - service_facts
+  
+  tasks:
+    - name: Gather comprehensive facts
+      setup:
+        gather_subset:
+          - 'all'
+          - '!facter'
+          - '!ohai'
+      tags: ['facts']
+    
+    - name: Gather service facts
+      service_facts:
+      tags: ['facts']
+    
+    - name: Create custom facts directory
+      file:
+        path: /etc/ansible/facts.d
+        state: directory
+        mode: '0755'
+      become: yes
+      tags: ['custom_facts']
+    
+    - name: Deploy custom web server facts
+      copy:
+        content: |
+          #!/bin/bash
+          echo "{"
+          echo "  \"web_server_installed\": \"$(rpm -q httpd >/dev/null 2>&1 && echo true || echo false)\","
+          echo "  \"web_server_running\": \"$(systemctl is-active httpd 2>/dev/null || echo false)\","
+          echo "  \"web_port_open\": \"$(ss -tlnp | grep :80 >/dev/null 2>&1 && echo true || echo false)\","
+          echo "  \"last_deployment\": \"$(stat -c %Y /var/www/html/index.html 2>/dev/null || echo 0)\""
+          echo "}"
+        dest: /etc/ansible/facts.d/webserver.fact
+        mode: '0755'
+      become: yes
+      tags: ['custom_facts']
+    
+    - name: Refresh facts after custom fact deployment
+      setup:
+        filter: ansible_local
+      tags: ['custom_facts']
+    
+    - name: Display cached facts summary
+      debug:
+        msg: |
+          Host: {{ inventory_hostname }}
+          OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
+          Memory: {{ ansible_memtotal_mb }}MB
+          CPU: {{ ansible_processor_vcpus }} cores
+          Web Server Status: {{ ansible_local.webserver.web_server_installed | default('unknown') }}
+      tags: ['summary']
